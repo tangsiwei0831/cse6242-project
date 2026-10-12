@@ -10,14 +10,6 @@ in `datasets/` and are mounted read-only into the database container.
 
 ## Start the database and import data
 
-Optionally create a local environment file and change the password:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Start PostgreSQL:
-
 ```powershell
 docker compose up --build -d
 ```
