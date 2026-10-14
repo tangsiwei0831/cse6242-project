@@ -1,119 +1,63 @@
 # CSE6242 Project
 
-This project uses PostgreSQL 17 with PostGIS, running in Docker. CSV files stay
-in `datasets/` and are mounted read-only into the database container.
+This database importer supports CSV exports from the official
+[NYC Open Data Dog Runs dataset](https://data.cityofnewyork.us/Recreation/Dog-Runs/hxx3-bwgv)
+and [NYC Dog Licensing dataset](https://data.cityofnewyork.us/Health/NYC-Dog-Licensing-Dataset/nu7n-tubp).
 
-## Prerequisites
+## Initial setup
 
-- Docker Desktop with Docker Compose
-- A Dog Runs CSV in `datasets/` named `Dog_Runs_*.csv`
+Create a `datasets/` folder and place the CSV exports in it. Name Dog Runs files
+`Dog_Runs_*.csv` (for example, `Dog_Runs_20261012.csv`) and Dog Licensing files
+`NYC_Dog_Licensing_Dataset_*.csv` (for example,
+`NYC_Dog_Licensing_Dataset_20261013.csv`). The folder and its contents are
+excluded from Git.
 
-## Start the database and import data
+Create the folder first:
 
-```powershell
+```bash
+mkdir -p datasets
+```
+
+Download one or both CSV exports into `datasets/`, using the filenames above,
+before starting Docker:
+
+```bash
 docker compose up --build -d
 ```
 
-On the first start, Docker creates the schema and imports the newest matching
-Dog Runs CSV. Database files are retained in the `postgres_data` Docker volume.
-
-Check container health and logs:
-
-```powershell
-docker compose ps
-docker compose logs db
-```
+On initial startup, Docker creates the PostGIS schema and bulk-imports the newest
+matching CSV for each dataset. A missing Dog Licensing CSV is skipped; a Dog Runs
+CSV is required.
 
 Verify the import:
 
-```powershell
+```bash
 docker compose exec db psql -U cse6242 -d cse6242 -c "SELECT count(*) FROM dog_runs;"
+docker compose exec db psql -U cse6242 -d cse6242 -c "SELECT count(*) FROM dog_licenses;"
 ```
 
-The current file should produce 95 rows.
+## Refresh the data
 
-## Connect to PostgreSQL
+After placing a later matching CSV in `datasets/`, refresh the relevant table
+with:
 
-Default local connection values:
-
-| Setting | Value |
-| --- | --- |
-| Host | `localhost` |
-| Port | `5432` |
-| Database | `cse6242` |
-| User | `cse6242` |
-| Password | `cse6242_local` |
-
-Override these values in `.env`. Do not commit `.env`.
-
-Open an interactive connection inside the container:
-
-```powershell
-docker compose exec db psql -U cse6242 -d cse6242
-```
-
-Example spatial query returning the center point of each dog run:
-
-```sql
-SELECT name, ST_AsText(ST_Centroid(geometry)) AS center
-FROM dog_runs
-ORDER BY name;
-```
-
-## Import a newer Dog Runs CSV
-
-Place the file in `datasets/`, then run:
-
-```powershell
+```bash
 docker compose exec db import-dog-runs
+docker compose exec db import-dog-licenses
 ```
 
-The importer selects the last filename matching `Dog_Runs_*.csv`. To select a
-specific file, pass its path inside the container:
+The Dog Runs importer updates records by `OBJECTID`. Because the licensing export
+has no stable record ID, its importer replaces the `dog_licenses` table contents
+with the selected CSV as one transaction. Invalid or missing year values are
+stored as `NULL`.
 
-```powershell
-docker compose exec db import-dog-runs /datasets/Dog_Runs_20261012.csv
-```
+Rebuild the database image before the first Dog Licensing import into an existing
+database volume:
 
-Imports use PostgreSQL `COPY` for bulk loading and then upsert on `OBJECTID`, so
-running an import again updates existing rows rather than duplicating them. Each
-run is recorded in `data_imports`.
-
-## Schema
-
-`dog_runs` contains the cleaned source fields. Important transformations are:
-
-- `OBJECTID` is stored as an integer after removing thousands separators.
-- `the_geom` is stored as PostGIS `geometry(MultiPolygon, 4326)`.
-- Blank values become SQL `NULL` where appropriate.
-- Administrative identifiers and `ZIPCODE` remain text because a row can
-  contain multiple values (for example, precinct `20, 24`).
-- `source_file`, `imported_at`, and `updated_at` preserve import provenance.
-
-Indexes are provided for geometry, borough, ZIP code, and feature status.
-
-## Adding large datasets
-
-For each new CSV type, add:
-
-1. A typed destination table in `db/init/01-schema.sql`.
-2. A temporary all-text staging table in a new import script.
-3. A `COPY` into staging followed by validation and conversion into the typed
-   table.
-4. Indexes on columns used for filtering, joining, and spatial queries.
-
-This staging pattern works well for files with hundreds of thousands or
-millions of rows and avoids loading an entire CSV into application memory.
-
-## Recreate everything
-
-Normal `docker compose down` keeps the database volume. To intentionally delete
-the local database and rerun all initialization scripts from scratch:
-
-```powershell
-docker compose down -v
+```bash
 docker compose up --build -d
+docker compose exec db import-dog-licenses
 ```
 
-The `-v` command permanently removes the local database volume; the source CSV
-files in `datasets/` are not removed.
+> **Note:** Automatic schema initialization runs only when Docker creates a new
+> database volume. It does not run again for an existing database volume.
