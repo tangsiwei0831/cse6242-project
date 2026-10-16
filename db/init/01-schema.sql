@@ -45,6 +45,30 @@ CREATE INDEX IF NOT EXISTS dog_licenses_zipcode_idx ON dog_licenses (zipcode);
 CREATE INDEX IF NOT EXISTS dog_licenses_breed_name_idx ON dog_licenses (breed_name);
 CREATE INDEX IF NOT EXISTS dog_licenses_extract_year_idx ON dog_licenses (extract_year);
 
+CREATE TABLE IF NOT EXISTS pluto (
+    bbl bigint PRIMARY KEY,
+    borough text,
+    tax_block text,
+    tax_lot text,
+    community_board text,
+    postcode text,
+    address text,
+    landuse text,
+    lotarea numeric,
+    bldgarea numeric,
+    resarea numeric,
+    numbldgs numeric,
+    numfloors numeric,
+    unitsres numeric,
+    unitstotal numeric,
+    yearbuilt integer,
+    latitude double precision,
+    longitude double precision,
+    geometry geometry(Point, 4326),
+    source_file text NOT NULL,
+    imported_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS data_imports (
     import_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     dataset_name text NOT NULL,
