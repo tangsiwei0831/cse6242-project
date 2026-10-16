@@ -69,6 +69,10 @@ CREATE TABLE IF NOT EXISTS pluto (
     imported_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE INDEX IF NOT EXISTS pluto_postcode_idx ON pluto (postcode);
+CREATE INDEX IF NOT EXISTS pluto_landuse_idx ON pluto (landuse);
+CREATE INDEX IF NOT EXISTS pluto_geometry_gix ON pluto USING GIST (geometry);
+
 CREATE TABLE IF NOT EXISTS data_imports (
     import_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     dataset_name text NOT NULL,
