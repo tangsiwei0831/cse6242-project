@@ -8,6 +8,9 @@ This database importer supports these datasets:
 - [Primary Land Use Tax Lot Output (PLUTO)](https://data.cityofnewyork.us/City-Government/Primary-Land-Use-Tax-Lot-Output-PLUTO-/64uk-42ks/about_data)
 - [Parks Inspection Program Inventory](https://data.cityofnewyork.us/City-Government/Parks-Inspection-Program-Inventory/86a8-pqby)
 - [311 Service Requests from 2020 to Present](https://data.cityofnewyork.us/Social-Services/311-Service-Requests-from-2020-to-Present/erm2-nwe9)
+- [DOHMH Dog Bite Data](https://data.cityofnewyork.us/Health/DOHMH-Dog-Bite-Data/rsgh-akpg/about_data)
+- [Walk to a Park Service Area for CEQR Open Space Assessment](https://data.cityofnewyork.us/dataset/Walk-to-a-Park-Service-Area-for-CEQR-Open-Space-As/k66c-pzws/about_data)
+- [2020 Neighborhood Tabulation Areas (NTAs)](https://data.cityofnewyork.us/City-Government/2020-Neighborhood-Tabulation-Areas-NTAs-/9nt8-h7nd/about_data)
 
 ## Initial setup
 
@@ -20,6 +23,9 @@ patterns:
 - PLUTO: `Primary_Land_Use_Tax_Lot_Output_(PLUTO)_*.csv`
 - Parks Inspection Inventory: `Parks_Inspection_Program_*_Inventory_*.csv`
 - 311 Service Requests: `311_Service_Requests_from_2020_to_Present_*.csv`
+- DOHMH Dog Bite Data: `DOHMH_Dog_Bite_Data_*.csv`
+- Walk to a Park Service Area: `Walk_to_a_Park_Service_Area_for_CEQR_Open_Space_Assessment_*.csv`
+- 2020 Neighborhood Tabulation Areas: `2020_Neighborhood_Tabulation_Areas_(NTAs)_*.csv`
 
 The wildcard accommodates dated exports and the punctuation used in the Parks
 Inspection filename. The `datasets/` folder and its contents are excluded from
@@ -40,8 +46,9 @@ docker compose up --build -d
 
 On initial startup, Docker creates the PostGIS schema and bulk-imports the newest
 matching CSV for each dataset. Missing Dog Licensing, Parks Recreation, PLUTO,
-Parks Inspection Inventory, and 311 Service Requests CSVs are skipped; a Dog Runs
-CSV is required.
+Parks Inspection Inventory, 311 Service Requests, DOHMH Dog Bite Data, Walk to a
+Park Service Area, and 2020 Neighborhood Tabulation Areas CSVs are skipped; a
+Dog Runs CSV is required.
 
 Verify the import:
 
@@ -52,6 +59,9 @@ docker compose exec db psql -U cse6242 -d cse6242 -c "SELECT count(*) FROM parks
 docker compose exec db psql -U cse6242 -d cse6242 -c "SELECT count(*) FROM pluto;"
 docker compose exec db psql -U cse6242 -d cse6242 -c "SELECT count(*) FROM park_inspection_inventory;"
 docker compose exec db psql -U cse6242 -d cse6242 -c "SELECT count(*) FROM service_requests_311;"
+docker compose exec db psql -U cse6242 -d cse6242 -c "SELECT count(*) FROM dog_bites;"
+docker compose exec db psql -U cse6242 -d cse6242 -c "SELECT count(*) FROM walk_to_park_service_areas;"
+docker compose exec db psql -U cse6242 -d cse6242 -c "SELECT count(*) FROM nta_2020;"
 ```
 
 ## Refresh the data
@@ -66,6 +76,9 @@ docker compose exec db import-parks-recreation
 docker compose exec db import-pluto
 docker compose exec db import-park-inspection-inventory
 docker compose exec db import-service-requests-311
+docker compose exec db import-dog-bites
+docker compose exec db import-walk-to-park-service-areas
+docker compose exec db import-nta-2020
 ```
 
 The Dog Runs importer updates records by `OBJECTID`. Because the licensing export
@@ -90,6 +103,20 @@ The 311 importer transactionally replaces `service_requests_311` using the
 export's unique request key. Source dates are stored as local timestamps and the
 `Location` WKT is stored as nullable PostGIS `Point` geometry in SRID 4326.
 
+The Dog Bite Data importer transactionally replaces `dog_bites`. `UniqueID` is
+retained as a non-unique source field because it repeats in the export; each
+record has an internal `dog_bite_id`. Dog ages are stored as text to preserve
+values such as months and age ranges, and `SpayNeuter` is stored as a nullable
+boolean.
+
+The Walk to a Park Service Area importer transactionally replaces
+`walk_to_park_service_areas` and stores its polygon as SRID 4326 PostGIS
+`MultiPolygon` geometry.
+
+The 2020 Neighborhood Tabulation Areas importer transactionally replaces
+`nta_2020`. NTA codes are retained as text, source area and length values as
+numeric, and neighborhood boundaries as SRID 4326 `MultiPolygon` geometry.
+
 Rebuild the database image before the first Dog Licensing import into an existing
 database volume:
 
@@ -100,6 +127,9 @@ docker compose exec db import-parks-recreation
 docker compose exec db import-pluto
 docker compose exec db import-park-inspection-inventory
 docker compose exec db import-service-requests-311
+docker compose exec db import-dog-bites
+docker compose exec db import-walk-to-park-service-areas
+docker compose exec db import-nta-2020
 ```
 
 > **Note:** Automatic schema initialization runs only when Docker creates a new
