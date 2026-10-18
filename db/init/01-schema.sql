@@ -48,6 +48,61 @@ CREATE INDEX IF NOT EXISTS dog_licenses_zipcode_idx ON dog_licenses (zipcode);
 CREATE INDEX IF NOT EXISTS dog_licenses_breed_name_idx ON dog_licenses (breed_name);
 CREATE INDEX IF NOT EXISTS dog_licenses_extract_year_idx ON dog_licenses (extract_year);
 
+CREATE TABLE IF NOT EXISTS dog_bites (
+    dog_bite_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    unique_id text NOT NULL,
+    date_of_bite date NOT NULL,
+    species text,
+    breed text,
+    age text,
+    gender text,
+    spay_neuter boolean,
+    borough text,
+    zipcode text,
+    source_file text NOT NULL,
+    imported_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS dog_bites_unique_id_idx ON dog_bites (unique_id);
+CREATE INDEX IF NOT EXISTS dog_bites_date_of_bite_idx ON dog_bites (date_of_bite);
+CREATE INDEX IF NOT EXISTS dog_bites_borough_idx ON dog_bites (borough);
+CREATE INDEX IF NOT EXISTS dog_bites_zipcode_idx ON dog_bites (zipcode);
+CREATE INDEX IF NOT EXISTS dog_bites_breed_idx ON dog_bites (breed);
+
+CREATE TABLE IF NOT EXISTS walk_to_park_service_areas (
+    walk_area_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    area text NOT NULL,
+    geometry geometry(MultiPolygon, 4326) NOT NULL,
+    source_file text NOT NULL,
+    imported_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS walk_to_park_service_areas_geometry_gix
+    ON walk_to_park_service_areas USING gist (geometry);
+
+CREATE TABLE IF NOT EXISTS nta_2020 (
+    nta_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    borocode smallint NOT NULL,
+    boroname text NOT NULL,
+    countyfips text NOT NULL,
+    nta2020 text NOT NULL UNIQUE,
+    ntaname text NOT NULL,
+    ntaabbrev text,
+    ntatype text,
+    cdta2020 text,
+    cdtaname text,
+    shape_length numeric,
+    shape_area numeric,
+    geometry geometry(MultiPolygon, 4326) NOT NULL,
+    source_file text NOT NULL,
+    imported_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS nta_2020_geometry_gix ON nta_2020 USING gist (geometry);
+CREATE INDEX IF NOT EXISTS nta_2020_boroname_idx ON nta_2020 (boroname);
+CREATE INDEX IF NOT EXISTS nta_2020_cdta2020_idx ON nta_2020 (cdta2020);
+CREATE INDEX IF NOT EXISTS nta_2020_ntaname_idx ON nta_2020 (ntaname);
+
 CREATE TABLE IF NOT EXISTS parks_recreation (
     recreation_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     gis_property_number text NOT NULL,
