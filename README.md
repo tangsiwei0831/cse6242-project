@@ -64,6 +64,39 @@ docker compose exec db psql -U cse6242 -d cse6242 -c "SELECT count(*) FROM walk_
 docker compose exec db psql -U cse6242 -d cse6242 -c "SELECT count(*) FROM nta_2020;"
 ```
 
+## Connect with Docker Desktop
+
+Open the terminal for the `db` container in Docker Desktop, then connect to the
+database with:
+
+```bash
+psql -U cse6242 -d cse6242
+```
+
+List tables:
+
+```sql
+\dt
+```
+
+Describe a table:
+
+```sql
+\d service_requests_311
+```
+
+List large objects:
+
+```sql
+\dl
+```
+
+Exit `psql`:
+
+```sql
+\q
+```
+
 ## Refresh the data
 
 After placing a later matching CSV in `datasets/`, refresh the relevant table
