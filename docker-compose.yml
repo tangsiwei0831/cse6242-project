@@ -19,6 +19,24 @@ services:
       retries: 10
     restart: unless-stopped
 
+  web:
+    build:
+      context: ./web
+    environment:
+      PORT: 3000
+      DEV_MODE: "true"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cse6242}:${POSTGRES_PASSWORD:-cse6242_local}@db:5432/${POSTGRES_DB:-cse6242}
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    command: ["node", "--watch", "server.js"]
+    restart: unless-stopped
+
 volumes:
   postgres_data:
 

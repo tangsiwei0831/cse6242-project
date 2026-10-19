@@ -64,6 +64,55 @@ docker compose exec db psql -U cse6242 -d cse6242 -c "SELECT count(*) FROM walk_
 docker compose exec db psql -U cse6242 -d cse6242 -c "SELECT count(*) FROM nta_2020;"
 ```
 
+## Interactive dog run map
+
+The Docker stack includes a responsive D3 map backed by the PostGIS `dog_runs`
+and `nta_2020` tables. After starting the stack, open:
+
+<http://localhost:3000>
+
+The map shows active NYC dog runs, supports borough and name/ZIP filtering,
+zooming and panning, and displays surface, seating, area, and directions for a
+selected run. Set `WEB_PORT` in `.env` to expose it on a different host port.
+
+The Compose web service runs in development mode. Files under `web/` are mounted
+into the container, server changes restart Node automatically, and changes to
+`web/public/` refresh an open browser tab. A rebuild is only needed after changing
+`web/package.json` or the web `Dockerfile`.
+
+## Connect with Docker Desktop
+
+Open the terminal for the `db` container in Docker Desktop, then connect to the
+database with:
+
+```bash
+psql -U cse6242 -d cse6242
+```
+
+List tables:
+
+```sql
+\dt
+```
+
+Describe a table:
+
+```sql
+\d service_requests_311
+```
+
+List large objects:
+
+```sql
+\dl
+```
+
+Exit `psql`:
+
+```sql
+\q
+```
+
 ## Refresh the data
 
 After placing a later matching CSV in `datasets/`, refresh the relevant table
