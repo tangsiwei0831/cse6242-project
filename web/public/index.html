@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Explore active dog runs across New York City.">
+    <meta name="description" content="Explore dog runs, parks, neighborhood demand, and potential new dog-run locations across New York City.">
     <title>Off Leash NYC</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,9 +14,9 @@
     <main>
       <header class="masthead">
         <div class="brand"><span class="brand-mark" aria-hidden="true">●</span> Off Leash NYC</div>
-        <p class="eyebrow">NYC PARKS · ACTIVE DOG RUNS</p>
+        <p class="eyebrow">NYC PARKS · DOG RUN SUPPLY & DEMAND</p>
         <h1>Find room to <em>run.</em></h1>
-        <p class="intro">Explore every current dog run maintained in New York City parks. Select a neighborhood or filter by borough to find your next outing.</p>
+        <p class="intro">Explore active dog runs, parks, neighborhood demand, and candidate parks for future dog runs. Toggle layers to compare supply and need.</p>
       </header>
 
       <section class="dashboard" aria-label="Dog run explorer">
@@ -37,36 +37,77 @@
             <div id="borough-filters" class="filters"></div>
           </fieldset>
 
+          <fieldset class="layer-controls">
+            <legend>Map layers</legend>
+            <label><input type="checkbox" data-layer="places" checked><span class="legend-dot places-legend"></span>Parks, dog runs &amp; rankings</label>
+            <label><input type="checkbox" data-layer="demand"><span class="legend-dot license-legend"></span>Dog-license demand</label>
+            <label><input type="checkbox" data-layer="requests"><span class="legend-dot complaint-legend"></span>Dog-related 311 requests</label>
+            <fieldset class="score-scope">
+              <legend>Rank</legend>
+              <label><input type="radio" name="score-scope" value="without-runs" checked> Parks without an active dog run</label>
+              <label><input type="radio" name="score-scope" value="all"> All parks (including parks with runs)</label>
+            </fieldset>
+            <fieldset class="weight-controls">
+              <legend>Scoring weights <span id="weight-total">100%</span></legend>
+              <label for="weight-demand"><span>Dog-license demand</span><output id="weight-demand-value">35%</output></label>
+              <input id="weight-demand" type="range" min="0" max="100" step="1" value="35" data-weight="demand">
+              <label for="weight-access"><span>Access gap</span><output id="weight-access-value">25%</output></label>
+              <input id="weight-access" type="range" min="0" max="100" step="1" value="25" data-weight="access">
+              <label for="weight-complaints"><span>Dog-related 311 requests</span><output id="weight-complaints-value">20%</output></label>
+              <input id="weight-complaints" type="range" min="0" max="100" step="1" value="20" data-weight="complaints">
+              <label for="weight-suitability"><span>Park acreage</span><output id="weight-suitability-value">20%</output></label>
+              <input id="weight-suitability" type="range" min="0" max="100" step="1" value="20" data-weight="suitability">
+              <button id="apply-weights" type="button">Apply weights</button>
+              <button id="reset-weights" type="button">Reset default weights</button>
+            </fieldset>
+            <p id="weight-validation" class="weight-validation" role="status" aria-live="polite"></p>
+            <p class="layer-note">Adjust weights independently, then apply when their total is 100%. Only the top 8 parks show rank numbers by default; hover over any scored park for its rank and score. Parks without a run need positive reported acreage to be ranked. A run is matched to a park by shared Parks property ID or mapped location; unmatched runs remain separate map markers.</p>
+            <p id="score-status" class="score-status" aria-live="polite"></p>
+          </fieldset>
+
           <div class="results-heading">
-            <h2>Places</h2>
+            <h2>Active dog runs</h2>
             <button id="reset-view" type="button">Reset map</button>
           </div>
           <div id="run-list" class="run-list" aria-live="polite"></div>
+          <section class="opportunity-results" aria-label="Highest-ranked parks">
+            <h2 id="opportunity-heading">Top ranked parks</h2>
+            <div id="opportunity-list" aria-live="polite"></div>
+          </section>
         </aside>
 
         <div class="map-panel">
-          <div id="loading" class="loading">Loading NYC dog runs…</div>
-          <svg id="map" role="img" aria-label="Map of active dog runs in New York City"></svg>
-          <div class="map-key"><span></span> Active dog run</div>
+          <div id="loading" class="loading">Loading NYC map layers…</div>
+          <svg id="map" role="img" aria-label="Interactive map of NYC dog runs, parks, demand, complaints, and candidate parks"></svg>
+          <div id="map-key" class="map-key" aria-label="Map legend"></div>
+          <div id="map-tooltip" class="map-tooltip" role="status" hidden>
+            <strong></strong>
+            <small></small>
+          </div>
           <div class="zoom-controls" aria-label="Map zoom controls">
             <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
             <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
           </div>
           <article id="detail-card" class="detail-card" hidden>
             <button id="close-detail" class="close" type="button" aria-label="Close details">×</button>
-            <p class="detail-kicker">ACTIVE DOG RUN</p>
+            <p id="detail-kicker" class="detail-kicker">ACTIVE DOG RUN</p>
             <h2 id="detail-name"></h2>
             <p id="detail-location" class="detail-location"></p>
-            <dl>
+            <dl id="run-details">
               <div><dt>Surface</dt><dd id="detail-surface"></dd></div>
               <div><dt>Seating</dt><dd id="detail-seating"></dd></div>
               <div><dt>Area</dt><dd id="detail-area"></dd></div>
             </dl>
+            <div id="opportunity-details" hidden>
+              <p class="score-line">Opportunity score <strong id="detail-score"></strong><span>/ 100</span></p>
+              <p id="detail-factors" class="factor-breakdown"></p>
+              <p id="detail-caveat" class="detail-caveat"></p>
+            </div>
             <a id="directions" target="_blank" rel="noopener">Get directions ↗</a>
           </article>
         </div>
       </section>
-      <footer>Data: NYC Parks Dog Runs · Updated from the local project database</footer>
+      <footer>Data: NYC Parks, NYC Dog Licensing, PLUTO, and dog-related 311 requests. Candidate scores are exploratory comparisons—not site approvals—and depend on incomplete data and the published weighted factors.</footer>
     </main>
     <script src="/vendor/d3/d3.min.js"></script>
     <script src="app.js"></script>

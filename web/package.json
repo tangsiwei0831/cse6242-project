@@ -2,7 +2,7 @@
   "name": "nyc-dog-runs-map",
   "version": "1.0.0",
   "private": true,
-  "description": "Interactive map of current NYC dog runs",
+  "description": "Interactive map of NYC dog-run supply, demand, and candidate parks",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
