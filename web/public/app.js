@@ -8,6 +8,8 @@ const runLayer = mapRoot.append('g');
 const loading = document.querySelector('#loading');
 const list = document.querySelector('#run-list');
 const detail = document.querySelector('#detail-card');
+let demandData = null;
+let demandByNta = new Map();
 let projection;
 let path;
 
@@ -97,7 +99,10 @@ function drawMap() {
   projection = d3.geoMercator().fitExtent([[28, 28], [bounds.width - 28, bounds.height - 28]], state.neighborhoods);
   path = d3.geoPath(projection);
   neighborhoodLayer.selectAll('path').data(state.neighborhoods.features).join('path')
-    .attr('class', 'neighborhood').attr('d', path).append('title').text((feature) => feature.properties.name);
+    .attr('class', 'neighborhood').attr('d', path)
+    .on('pointermove', showDemandTooltip)
+    .on('pointerleave', () => { document.querySelector('#demand-tooltip').hidden = true; });
+  renderDemand();
   render();
 }
 
@@ -125,6 +130,7 @@ svg.on('click', () => { state.selected = null; detail.hidden = true; render(); }
 window.addEventListener('resize', () => { if (state.neighborhoods) drawMap(); });
 
 init();
+loadDemand();
 
 // In the local Docker development setup, refresh the page after frontend edits.
 (async function enableLiveReload() {
@@ -145,3 +151,64 @@ init();
     // Live reload is optional and should never affect the map.
   }
 }());
+
+const demandFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
+function renderDemand() {
+  document.querySelector('#demand-tooltip').hidden = true;
+  const enabled = document.querySelector('#demand-toggle').checked;
+  const metric = document.querySelector('#demand-metric').value;
+  const maximum = d3.max(demandData?.ntas || [], (n) => n[metric]) || 0;
+  const color = d3.scaleSequentialSqrt(d3.interpolateYlOrRd).domain([0, maximum || 1]);
+  neighborhoodLayer.selectAll('path').style('fill', (f) => {
+    if (!enabled || !demandData) return null;
+    const value = demandByNta.get(f.id)?.[metric];
+    return value == null ? '#c4c8cc' : value === 0 ? '#fffdf8' : color(value);
+  });
+  const legend = document.querySelector('#demand-legend');
+  legend.hidden = !enabled || !demandData;
+  legend.replaceChildren();
+  if (legend.hidden) return;
+  const title = document.createElement('strong');
+  title.textContent = metric === 'estimatedDemand' ? 'Estimated licensed-dog total' : 'Estimated licenses / 1,000 units';
+  legend.append(title);
+  const ramp = document.createElement('div');
+  ramp.className = 'demand-ramp';
+  ramp.style.background = `linear-gradient(to right, ${d3.range(11).map((i) => color(maximum * i / 10)).join(',')})`;
+  legend.append(ramp);
+  const labels = document.createElement('div');
+  labels.textContent = `Low → ${demandFormat.format(maximum)} · square-root scale`;
+  legend.append(labels);
+  const key = document.createElement('div');
+  key.textContent = '□ White: zero demand · ■ Gray: missing data';
+  legend.append(key);
+  document.querySelector('#demand-tooltip').hidden = true;
+}
+function showDemandTooltip(event, feature) {
+  if (!demandData || !document.querySelector('#demand-toggle').checked) return;
+  const n = demandByNta.get(feature.id);
+  const tooltip = document.querySelector('#demand-tooltip');
+  const fmt = (v) => v == null ? 'Missing data' : demandFormat.format(v);
+  tooltip.textContent = `${feature.properties.name}\nEstimated Licensed-Dog Demand: ${fmt(n?.estimatedDemand)}\nResidential units: ${fmt(n?.residentialUnits)}\nCovered units: ${fmt(n?.coveredResidentialUnits)}\nPer 1,000 covered units: ${fmt(n?.demandPer1000Units)}${n?.flags.partialCoverage ? '\nPartial coverage: invalid units or unknown ZIP.' : ''}\nModeled estimate; not observed dog locations.`;
+  tooltip.hidden = false;
+  const box = document.querySelector('.map-panel').getBoundingClientRect();
+  tooltip.style.left = `${Math.max(8, Math.min(event.clientX - box.left + 14, box.width - tooltip.offsetWidth - 8))}px`;
+  tooltip.style.top = `${Math.max(8, Math.min(event.clientY - box.top + 14, box.height - tooltip.offsetHeight - 8))}px`;
+}
+async function loadDemand() {
+  const quality = document.querySelector('#demand-quality');
+  try {
+    const response = await fetch('/api/dog-demand');
+    if (!response.ok) throw new Error('Demand request failed');
+    demandData = await response.json();
+    demandByNta = new Map(demandData.ntas.map((n) => [n.id, n]));
+    const s = demandData.summary;
+    quality.textContent = `${demandFormat.format(s.nta_demand)} of ${demandFormat.format(s.active_license_records)} deduplicated active license records mapped. Excluded: ${demandFormat.format(s.excluded_demand)} (${demandFormat.format(s.unallocatable_demand)} unallocatable by ZIP/units; ${demandFormat.format(s.missing_coordinate_demand)} missing coordinates; ${demandFormat.format(s.outside_nta_demand)} outside NTAs; ${demandFormat.format(s.ambiguous_nta_demand)} ambiguous). Residential parcels assigned: ${s.assigned_residential_parcels}/${s.residential_parcels}.`;
+    if (!Object.values(demandData.metadata.availability).every(Boolean)) quality.textContent += ' Required source data is missing.';
+    renderDemand();
+  } catch (error) {
+    quality.textContent = 'Demand unavailable. Dog-run exploration remains available.';
+    console.error(error);
+  }
+}
+document.querySelector('#demand-toggle').addEventListener('change', renderDemand);
+document.querySelector('#demand-metric').addEventListener('change', renderDemand);

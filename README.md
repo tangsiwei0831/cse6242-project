@@ -183,3 +183,73 @@ docker compose exec db import-nta-2020
 
 > **Note:** Automatic schema initialization runs only when Docker creates a new
 > database volume. It does not run again for an existing database volume.
+
+## Estimated Licensed-Dog Demand
+
+The map includes an optional NTA choropleth with a metric selector for estimated
+licensed-dog totals or estimated licenses per 1,000 covered residential units.
+Hover over neighborhoods for metrics and coverage flags; expand **Data coverage**
+for excluded demand and residential-parcel assignment counts. Dog-run filters
+continue to affect markers and the places list; demand colors keep a citywide
+scale and are independent of name/borough filters.
+
+Run the existing stack with `docker compose up --build -d` and open
+<http://localhost:3000>. Existing volumes must already have Dog Licensing, PLUTO,
+and NTA data imported (see refresh commands above). No schema migration or new
+source dataset is needed. The first demand request does spatial processing (about 78 seconds on the local
+validation stack);
+subsequent requests share a five-minute in-memory cache. After importing new data,
+wait for expiry or restart the web service, then reload the page.
+
+`GET /api/dog-demand` returns aggregate `ntas`, `zipDiagnostics`, `summary`, and
+`metadata`. It never returns animal attributes or individual license records.
+The calculation lives in `web/sql/dog-demand.sql`:
+
+- Select extract year 2026 and licenses active on 2025-12-31 (inclusive dates).
+  Deduplicate the same seven fields as `db/demand_eda.sql` before ZIP aggregation.
+  Exact-record deduplication does not identify distinct animals across renewals.
+- Trim ZIPs and require five digits for allocation. Remove commas from PLUTO
+  `unitsres`, accept nonnegative integer strings, and treat invalid/missing units
+  as unknown. Zero-unit parcels receive no allocation. No ZIP padding or ZIP+4
+  conversion is inferred.
+- Allocate each ZIP's license count proportionally over its known positive
+  residential units, including parcels without coordinates in the denominator.
+  Invalid residential capacity cannot be quantified and is flagged; estimates
+  assume the known unit totals represent the ZIP's usable residential capacity.
+- Use full-resolution NTA polygons and `ST_Covers` to assign each parcel point.
+  Exclude parcels matching zero or multiple NTAs; never duplicate or arbitrarily
+  assign demand at shared boundaries. Missing-coordinate allocations remain
+  excluded rather than redistributed. Borough/name filters do not change this.
+- Report unmatched/invalid licensing ZIPs and ZIPs without positive units in
+  `zipDiagnostics`. `summary` separates unallocatable demand, missing-coordinate
+  demand, outside-NTA demand, and ambiguous-NTA demand. Conservation identities:
+  active records = unallocatable + parcel allocations; parcel allocations = NTA
+  allocations + missing-coordinate + outside-NTA + ambiguous allocations.
+  Numeric residuals should be zero within floating-point tolerance.
+- NTA residential units include all known units spatially assigned there; covered
+  units include only those with an allocatable ZIP. The rate uses covered units,
+  so missing ZIPs are not interpreted as zero demand. Partial coverage and invalid
+  unit counts are flagged. Gray means no covered units or no 2026 license source;
+  white means covered residential units with zero active licenses in their ZIPs.
+
+These are **Estimated Licensed-Dog Demand** values, not actual dog population or
+observed dog locations. The model assumes uniform license density per residential
+unit within each ZIP. Licensing participation, unknown residential capacity, and
+different source vintages can bias estimates. Missing coordinates cannot be
+attributed to a particular NTA, so those exclusions are reported globally/by ZIP.
+
+Validation against PostGIS uses temporary tables in a rolled-back transaction;
+production tables are not changed:
+
+```bash
+docker compose exec -T web env RUN_DB_TESTS=1 npm test
+```
+
+The fixture checks exact duplicates, date/extract filtering, comma-formatted
+units, invalid/zero units, unmatched/invalid ZIPs, missing coordinates, outside
+NTAs, shared-boundary ambiguity, zero versus missing demand, and conservation.
+For live data, inspect `/api/dog-demand`: `conservation_error` and
+`spatial_conservation_error` should be near zero; each allocatable ZIP's
+`allocated_demand` should equal its `dogs`. `assigned_residential_parcels` divided
+by `residential_parcels` measures point assignment coverage. Tests are skipped
+unless `RUN_DB_TESTS` is set and use the configured `DATABASE_URL`.

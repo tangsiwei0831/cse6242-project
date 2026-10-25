@@ -80,3 +80,14 @@ footer { padding: 18px 44px 28px; color: var(--muted); font-size: 11px; }
   .detail-card { right: 18px; top: auto; bottom: 52px; width: calc(100% - 36px); }
   footer { padding-left: 22px; }
 }
+
+.demand-controls { margin-top: 6px; }
+.demand-controls label { display: block; margin: 6px 0; font-size: 12px; }
+.demand-controls select { width: 100%; padding: 6px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); }
+.demand-controls p, .demand-controls summary { font-size: 11px; line-height: 1.4; color: var(--muted); }
+.sidebar { overflow-y: auto; }
+.run-list { flex: 1 0 120px; }
+.demand-legend { position: absolute; left: 18px; bottom: 58px; max-width: calc(100% - 36px); padding: 10px; background: rgba(255,253,248,.96); border-radius: 8px; font-size: 11px; pointer-events: none; }
+.demand-legend strong { display: block; }
+.demand-ramp { height: 10px; margin: 6px 0; }
+.demand-tooltip { position: absolute; z-index: 5; max-width: min(290px, calc(100% - 16px)); padding: 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 15px #17352b33; font-size: 12px; line-height: 1.5; white-space: pre-line; pointer-events: none; }

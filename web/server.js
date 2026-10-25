@@ -77,6 +77,32 @@ app.get('/api/dog-runs', async (request, response, next) => {
   }
 });
 
+// Keep the SQL with the web service so the existing Docker build/mount includes it.
+const demandSql = require('node:fs').readFileSync(path.join(__dirname, 'sql/dog-demand.sql'), 'utf8');
+// Share expensive spatial work between visitors; imports become visible within 5 min.
+let demandCache;
+let demandPending;
+async function getDemand() {
+  if (demandCache && Date.now() - demandCache.createdAt < 300000) return demandCache.payload;
+  if (!demandPending) {
+    demandPending = pool.query(demandSql).then((result) => {
+      const payload = result.rows[0].payload;
+      payload.metadata.computedAt = new Date().toISOString();
+      demandCache = { payload, createdAt: Date.now() };
+      return payload;
+    }).finally(() => { demandPending = null; });
+  }
+  return demandPending;
+}
+app.get('/api/dog-demand', async (_request, response, next) => {
+  try {
+    response.set('Cache-Control', 'no-store');
+    response.json(await getDemand());
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/neighborhoods', async (_request, response, next) => {
   try {
     const result = await pool.query(
