@@ -184,72 +184,216 @@ docker compose exec db import-nta-2020
 > **Note:** Automatic schema initialization runs only when Docker creates a new
 > database volume. It does not run again for an existing database volume.
 
-## Estimated Licensed-Dog Demand
+## Estimated Licensed-Dog Demand and 800m Accessibility
 
-The map includes an optional NTA choropleth with a metric selector for estimated
-licensed-dog totals or estimated licenses per 1,000 covered residential units.
-Hover over neighborhoods for metrics and coverage flags; expand **Data coverage**
-for excluded demand and residential-parcel assignment counts. Dog-run filters
-continue to affect markers and the places list; demand colors keep a citywide
-scale and are independent of name/borough filters.
-
-Run the existing stack with `docker compose up --build -d` and open
-<http://localhost:3000>. Existing volumes must already have Dog Licensing, PLUTO,
-and NTA data imported (see refresh commands above). No schema migration or new
-source dataset is needed. The first demand request does spatial processing (about 78 seconds on the local
-validation stack);
-subsequent requests share a five-minute in-memory cache. After importing new data,
-wait for expiry or restart the web service, then reload the page.
-
-`GET /api/dog-demand` returns aggregate `ntas`, `zipDiagnostics`, `summary`, and
-`metadata`. It never returns animal attributes or individual license records.
-The calculation lives in `web/sql/dog-demand.sql`:
-
-- Select extract year 2026 and licenses active on 2025-12-31 (inclusive dates).
-  Deduplicate the same seven fields as `db/demand_eda.sql` before ZIP aggregation.
-  Exact-record deduplication does not identify distinct animals across renewals.
-- Trim ZIPs and require five digits for allocation. Remove commas from PLUTO
-  `unitsres`, accept nonnegative integer strings, and treat invalid/missing units
-  as unknown. Zero-unit parcels receive no allocation. No ZIP padding or ZIP+4
-  conversion is inferred.
-- Allocate each ZIP's license count proportionally over its known positive
-  residential units, including parcels without coordinates in the denominator.
-  Invalid residential capacity cannot be quantified and is flagged; estimates
-  assume the known unit totals represent the ZIP's usable residential capacity.
-- Use full-resolution NTA polygons and `ST_Covers` to assign each parcel point.
-  Exclude parcels matching zero or multiple NTAs; never duplicate or arbitrarily
-  assign demand at shared boundaries. Missing-coordinate allocations remain
-  excluded rather than redistributed. Borough/name filters do not change this.
-- Report unmatched/invalid licensing ZIPs and ZIPs without positive units in
-  `zipDiagnostics`. `summary` separates unallocatable demand, missing-coordinate
-  demand, outside-NTA demand, and ambiguous-NTA demand. Conservation identities:
-  active records = unallocatable + parcel allocations; parcel allocations = NTA
-  allocations + missing-coordinate + outside-NTA + ambiguous allocations.
-  Numeric residuals should be zero within floating-point tolerance.
-- NTA residential units include all known units spatially assigned there; covered
-  units include only those with an allocatable ZIP. The rate uses covered units,
-  so missing ZIPs are not interpreted as zero demand. Partial coverage and invalid
-  unit counts are flagged. Gray means no covered units or no 2026 license source;
-  white means covered residential units with zero active licenses in their ZIPs.
+The D3 map offers independent **Estimated demand** and **Accessibility / Underserved
+Demand** neighborhood layers. Demand can show totals or licenses per 1,000 units;
+accessibility colors NTAs by uncovered estimated demand. Hover for metrics, use
+**Data coverage** for exclusions, and **Reload estimates** after preparing new data.
+White represents zero demand for the selected metric; gray represents missing
+allocatable data. Dog-run markers, filters, zoom, and detail cards remain independent.
+The colors use a citywide square-root scale, unaffected by marker filters.
 
 These are **Estimated Licensed-Dog Demand** values, not actual dog population or
-observed dog locations. The model assumes uniform license density per residential
-unit within each ZIP. Licensing participation, unknown residential capacity, and
-different source vintages can bias estimates. Missing coordinates cannot be
-attributed to a particular NTA, so those exclusions are reported globally/by ZIP.
+observed dog locations. The allocation has not changed:
 
-Validation against PostGIS uses temporary tables in a rolled-back transaction;
-production tables are not changed:
+1. Use extract year 2026 and licenses active on **2025-12-31**, with inclusive dates.
+2. Deduplicate the seven fields from `db/demand_eda.sql`: animal name, gender,
+   birth year, breed, ZIP, issue date, and expiration date. Exact-record
+   deduplication does not identify individual animals across different renewals.
+3. Aggregate licensing records by trimmed ZIP before joining PLUTO. Require five
+   ZIP digits for allocation; do not infer ZIP padding or ZIP+4 conversion.
+4. Remove commas from `unitsres`; accept nonnegative integer strings. Invalid or
+   missing capacity is unknown and flagged; zero-unit parcels get no allocation.
+5. Allocate each ZIP's count in proportion to known positive residential units.
+   Parcels without coordinates remain in the ZIP denominator; their shares are
+   excluded from mapped demand rather than redistributed. Unknown capacity cannot
+   be quantified, so results assume the known unit totals represent usable capacity.
+6. Assign parcel points using full-resolution NTA polygons and `ST_Covers`.
+   Zero/multiple matches remain unassigned; shared boundaries never double-count.
+
+NTA `residentialUnits` includes all known spatially assigned units;
+`coveredResidentialUnits` means units with allocatable ZIP data, **not** units
+within 800m of a run. The demand rate uses this allocatable-unit denominator.
+Unmatched/invalid ZIPs, ZIPs without positive units, missing coordinates, invalid
+locations, outside-NTA demand, ambiguous assignment, and partial data remain
+explicitly accounted for. Licensing participation and source vintages can bias estimates.
+
+### Accessibility definition
+
+Only positive-unit residential parcels with valid nonempty WGS84 point locations
+are eligible. A parcel is covered if its **spheroidal geography distance to an active
+dog-run polygon boundary or interior is ≤800 meters**. Points inside runs have zero
+distance. Inactive runs are excluded; overlapping service areas never duplicate demand.
+
+The optimized query tests `ST_DWithin(point::geography, polygon::geography, 800, true)`.
+This is the same condition as minimum active-polygon distance ≤800m; it avoids
+computing unused nearest distances for every distant parcel. It uses no approximate
+buffers, projected distances, or spherical nearest-neighbor ranking. A run-first
+lateral join searches the parcel geography GiST index once per active run; `OFFSET 0`
+keeps PostgreSQL from reversing that join because of poor validity selectivity estimates.
+
+Per NTA, the API reports `accessibilityTotalDemand`, `coveredDemand`,
+`uncoveredDemand`, and `coveragePercentage = 100 * covered / total`. Zero total demand
+has an undefined (`null`) coverage percentage. If there are no active runs, all eligible
+demand is uncovered and flagged. Valid-location demand without a unique NTA is counted
+globally but excluded from NTA metrics. Missing/invalid coordinates are never redistributed.
+
+**800m is a straight-line service radius, not walking distance.** Streets, entrances,
+barriers, opening hours, and run capacity are not modeled; coverage does not establish
+service quality.
+
+### First preparation and refresh after imports
+
+Start the existing stack, then prepare the aggregates:
 
 ```bash
-docker compose exec -T web env RUN_DB_TESTS=1 npm test
+docker compose up --build -d
+docker compose exec -T web node scripts/refresh-map-data.js
 ```
 
-The fixture checks exact duplicates, date/extract filtering, comma-formatted
-units, invalid/zero units, unmatched/invalid ZIPs, missing coordinates, outside
-NTAs, shared-boundary ambiguity, zero versus missing demand, and conservation.
-For live data, inspect `/api/dog-demand`: `conservation_error` and
-`spatial_conservation_error` should be near zero; each allocatable ZIP's
-`allocated_demand` should equal its `dogs`. `assigned_residential_parcels` divided
-by `residential_parcels` measures point assignment coverage. Tests are skipped
-unless `RUN_DB_TESTS` is set and use the configured `DATABASE_URL`.
+For an existing stack, the second command installs the additive schema, revision
+triggers, and parcel geography index automatically. It never deletes/reimports source
+data. Index creation on the first installation can briefly block source writes; readers
+remain available. Fresh database images also install this schema during initialization.
+Snapshots still need to be prepared explicitly.
+
+After the existing dataset import commands finish, run the same refresh command, then
+click **Reload estimates** or reload <http://localhost:3000>. No volume reset is needed.
+No importer changes are required. Optional maintenance commands:
+
+```bash
+# Publish demand without waiting for accessibility.
+docker compose exec -T web node scripts/refresh-map-data.js --demand-only
+
+# Sufficient after changing only Dog Runs.
+docker compose exec -T web node scripts/refresh-map-data.js --accessibility-only
+
+# Install schema/indexes without computing aggregates.
+docker compose exec -T web node scripts/refresh-map-data.js --install-only
+```
+
+The default command publishes **demand first**, commits it, then prepares accessibility.
+Each calculation uses a repeatable-read transaction. Conservation validation must pass
+before a single atomic upsert publishes its result. A source-version check at publication
+rejects imports committed during calculation; rerun after imports finish. The final version
+lock is short, rather than blocking imports throughout the spatial calculation. A session
+advisory lock prevents overlapping refresh commands. Errors/cancellation retain previously
+published snapshots; a default run may successfully publish demand even if accessibility
+later fails. Incomplete/missing source datasets are not published as zero-demand results.
+
+Run refresh explicitly after SQL/model changes as well. HTTP requests never perform DDL,
+spatial calculations, or automatic refreshes.
+
+### Persistence, API states, and cache invalidation
+
+`map_aggregate_snapshots` stores two durable aggregate JSON snapshots, keyed by `demand`
+and `accessibility`, plus revision, unique publication generation, timestamp, and duration.
+Only aggregate statistics are stored/returned; no animal attributes or individual license
+records are exposed. Snapshots survive web/database restarts.
+
+| Endpoint | Prepared output |
+| --- | --- |
+| `GET /api/dog-demand` | Demand-only NTA metrics, ZIP diagnostics, source availability, conservation summary |
+| `GET /api/dog-accessibility` | Accessibility metrics/summary plus the same demand diagnostics for its source snapshot |
+
+Statement triggers track normal inserts, updates, deletes, and truncates, including the
+existing import scripts. Licensing, PLUTO, and NTA changes invalidate both kinds; Dog Run
+changes invalidate accessibility only. Each kind has its own revision counter, so revision
+numbers across the two kinds need not be equal.
+
+Every API read checks the current PostgreSQL source revision and published generation.
+An in-memory hit avoids transferring/parsing the stored JSON again; it never skips that
+check. A new publication invalidates memory caches immediately, even when sources did not
+change. There is **no five-minute expiry that starts spatial work**. `X-Aggregate-Cache`
+reports `miss`/`hit`; browser responses use `Cache-Control: no-store`.
+
+Before preparation, the endpoint returns HTTP 503 with `status: not_ready`. After imports,
+an obsolete snapshot returns HTTP 503 with `status: stale` until refreshed; it is retained
+in storage but never silently served as current. During refresh of unchanged sources,
+readers continue to receive the previous valid generation. Database errors do not fall
+back to unchecked cached values.
+
+The frontend loads markers, demand, and accessibility independently. A pending, stale,
+or failed accessibility response cannot hold up demand. Each view shows its own loading,
+preparation, stale, or unavailable message and prepared timestamp. Changing layers never
+mixes demand data from one response with accessibility data from another.
+
+### Files
+
+| File | Responsibility |
+| --- | --- |
+| `web/sql/demand-base.sql` | Single shared ZIP → PLUTO → NTA model and demand diagnostics/payload |
+| `web/sql/dog-demand.sql` | Demand-only output, with no run-distance computation |
+| `web/sql/dog-accessibility.sql` | Exact 800m classification and accessibility aggregates |
+| `web/lib/queries.js` | Compose both queries from the shared definition |
+| `web/sql/map-aggregates-schema.sql` | Snapshot/version tables, source triggers, parcel geography index |
+| `web/lib/refresh-aggregates.js` | Validation, consistent snapshots, atomic publication, refresh lock |
+| `web/lib/aggregate-store.js` | Revision/generation-aware API memory cache |
+| `web/scripts/refresh-map-data.js` | Explicit preparation/refresh CLI |
+| `web/server.js`, `web/public/app.js` | Independent API routes and layer loading/rendering |
+
+### Validation and benchmarks
+
+```bash
+# Includes isolated PostGIS fixtures; public source tables are not modified.
+docker compose exec -T web env RUN_DB_TESTS=1 npm test
+
+# Check the running server's conservation, persistence reads, and existing APIs.
+docker compose exec -T web node scripts/verify-accessibility.js
+
+# Fresh app instance guarantees application-cache misses, then measures hits.
+# No server/source-data reset or OS/PostgreSQL buffer-cache flush is performed.
+docker compose exec -T web node scripts/benchmark-map.js
+```
+
+Tests cover exact deduplication and unchanged demand-only/full results, invalid/zero units,
+missing/invalid coordinates, ZIP/NTA exclusions, polygon interiors/boundaries,
+799.9m/800m/800.1m, inactive/overlapping runs, and zero demand. Classification is compared
+with brute-force minimum `ST_Distance`. Other tests cover import-trigger invalidation,
+new publication generations, restart persistence, stale/not-ready responses, failure and
+conservation-validation rollback, a concurrent import during calculation, concurrent
+refresh rejection, independent frontend loading, colors/tooltips, and original marker
+filters. Rendering tests use real D3 scales and a DOM adapter; they do not replace a
+browser check of layout, pointer delivery, and zoom.
+
+Conservation is checked at tolerance `1e-7` for API JSON numbers:
+
+- Active records = unallocatable ZIP demand + all parcel allocations.
+- Parcel allocations = NTA demand + missing-coordinate + outside-NTA + ambiguous demand.
+- Parcel allocations = eligible accessibility demand + missing/invalid-location demand.
+- Eligible accessibility demand = covered + uncovered = NTA total + unassigned NTA demand.
+- Each NTA total = its covered + uncovered demand.
+
+The optimized live results match the previous full calculation:
+
+| Metric | Estimated licensed-dog demand |
+| --- | ---: |
+| NTA total | 63,697.425617 |
+| NTA covered within 800m | 25,802.526867 |
+| NTA uncovered beyond 800m | 37,894.898750 |
+| Valid-location demand without a unique NTA | 34.689816 |
+| Missing-coordinate demand | 2.884567 |
+| Invalid-location demand | 0 |
+
+Another 275 records remain unallocatable by ZIP/units. All accessibility conservation
+residuals were zero; the original ZIP residual was approximately `3.46e-15` and original
+spatial residual was zero. Existing APIs returned 95 active runs, 41 Manhattan runs,
+and 262 NTA polygons.
+
+Measured local maintenance time (outside API requests): **57.251s demand** and
+**112.605s accessibility** with the final run-first plan, versus **1,335.143s** for the
+previous combined cold query. Accessibility refresh is about **11.9× faster**. First
+installation/index-build time is separate. Refresh is still substantial spatial work,
+but visitors never wait for it and current valid snapshots remain readable during it.
+
+Final application-cache benchmark (a fresh app/pool; PostgreSQL buffers were not reset):
+
+| API | Memory-cache miss | Memory-cache hit |
+| --- | ---: | ---: |
+| Demand | 111.03ms | 7.38ms |
+| Accessibility | 12.12ms | 3.66ms |
+
+The first demand request includes connection/app startup overhead. These are local samples,
+not latency guarantees. `metadata.queryDurationMs` reports maintenance calculation time,
+not API read time; `computedAt`, `sourceRevision`, and `generation` identify its snapshot.

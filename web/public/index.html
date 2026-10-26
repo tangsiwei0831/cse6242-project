@@ -39,13 +39,23 @@
 
           <fieldset class="demand-controls">
             <legend>Estimated Licensed-Dog Demand</legend>
-            <label><input id="demand-toggle" type="checkbox" checked> Show estimated demand</label>
-            <label for="demand-metric">Color neighborhoods by</label>
-            <select id="demand-metric">
-              <option value="estimatedDemand">Estimated total demand</option>
-              <option value="demandPer1000Units">Demand per 1,000 residential units</option>
+            <label><input id="demand-toggle" type="checkbox" checked> Show neighborhood layer</label>
+            <label for="map-layer">Neighborhood layer</label>
+            <select id="map-layer">
+              <option value="demand">Estimated demand</option>
+              <option value="accessibility">Accessibility / Underserved Demand</option>
             </select>
+            <div id="demand-metric-control">
+              <label for="demand-metric">Color neighborhoods by</label>
+              <select id="demand-metric">
+                <option value="estimatedDemand">Estimated total demand</option>
+                <option value="demandPer1000Units">Demand per 1,000 residential units</option>
+              </select>
+            </div>
+            <p id="accessibility-note" hidden>Uncovered estimated licensed-dog demand beyond an 800m straight-line service radius from active dog-run polygons. This is not walking distance; barriers, entrances, and run capacity are not modeled.</p>
             <p>Licenses active Dec 31, 2025 (2026 extract). Assumes uniform license density per residential unit within each ZIP. Modeled estimates, not observed dog locations.</p>
+            <p id="demand-status" role="status">Loading prepared demand estimates…</p>
+            <button id="reload-layers" type="button">Reload estimates</button>
             <details><summary>Data coverage</summary><p id="demand-quality" aria-live="polite">Loading demand…</p></details>
           </fieldset>
           <div class="results-heading">

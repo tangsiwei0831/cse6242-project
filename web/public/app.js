@@ -10,6 +10,10 @@ const list = document.querySelector('#run-list');
 const detail = document.querySelector('#detail-card');
 let demandData = null;
 let demandByNta = new Map();
+let accessibilityData = null;
+let accessibilityByNta = new Map();
+const layerStatus = { demand: 'Loading prepared demand estimates…', accessibility: 'Loading prepared accessibility estimates…' };
+const layerRequests = { demand: 0, accessibility: 0 };
 let projection;
 let path;
 
@@ -131,6 +135,7 @@ window.addEventListener('resize', () => { if (state.neighborhoods) drawMap(); })
 
 init();
 loadDemand();
+loadAccessibility();
 
 // In the local Docker development setup, refresh the page after frontend edits.
 (async function enableLiveReload() {
@@ -156,21 +161,32 @@ const demandFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }
 function renderDemand() {
   document.querySelector('#demand-tooltip').hidden = true;
   const enabled = document.querySelector('#demand-toggle').checked;
-  const metric = document.querySelector('#demand-metric').value;
-  const maximum = d3.max(demandData?.ntas || [], (n) => n[metric]) || 0;
+  const accessibility = document.querySelector('#map-layer').value === 'accessibility';
+  document.querySelector('#demand-metric-control').hidden = accessibility;
+  document.querySelector('#accessibility-note').hidden = !accessibility;
+  const metric = accessibility ? 'uncoveredDemand' : document.querySelector('#demand-metric').value;
+  const data = accessibility ? accessibilityData : demandData;
+  const byNta = accessibility ? accessibilityByNta : demandByNta;
+  renderLayerStatus(accessibility ? 'accessibility' : 'demand', data);
+  const maximum = d3.max(data?.ntas || [], (n) => n[metric]) || 0;
   const color = d3.scaleSequentialSqrt(d3.interpolateYlOrRd).domain([0, maximum || 1]);
   neighborhoodLayer.selectAll('path').style('fill', (f) => {
-    if (!enabled || !demandData) return null;
-    const value = demandByNta.get(f.id)?.[metric];
+    if (!enabled || !data) return null;
+    const value = byNta.get(f.id)?.[metric];
     return value == null ? '#c4c8cc' : value === 0 ? '#fffdf8' : color(value);
   });
   const legend = document.querySelector('#demand-legend');
-  legend.hidden = !enabled || !demandData;
+  legend.hidden = !enabled || !data;
   legend.replaceChildren();
   if (legend.hidden) return;
   const title = document.createElement('strong');
-  title.textContent = metric === 'estimatedDemand' ? 'Estimated licensed-dog total' : 'Estimated licenses / 1,000 units';
+  title.textContent = accessibility ? 'Underserved estimated licensed-dog demand' : metric === 'estimatedDemand' ? 'Estimated licensed-dog total' : 'Estimated licenses / 1,000 units';
   legend.append(title);
+  if (accessibility) {
+    const note = document.createElement('div');
+    note.textContent = 'Beyond 800m straight-line radius · not walking distance';
+    legend.append(note);
+  }
   const ramp = document.createElement('div');
   ramp.className = 'demand-ramp';
   ramp.style.background = `linear-gradient(to right, ${d3.range(11).map((i) => color(maximum * i / 10)).join(',')})`;
@@ -179,36 +195,65 @@ function renderDemand() {
   labels.textContent = `Low → ${demandFormat.format(maximum)} · square-root scale`;
   legend.append(labels);
   const key = document.createElement('div');
-  key.textContent = '□ White: zero demand · ■ Gray: missing data';
+  key.textContent = accessibility ? 'White: zero uncovered demand · Gray: missing data' : '□ White: zero demand · ■ Gray: missing data';
   legend.append(key);
   document.querySelector('#demand-tooltip').hidden = true;
 }
 function showDemandTooltip(event, feature) {
-  if (!demandData || !document.querySelector('#demand-toggle').checked) return;
-  const n = demandByNta.get(feature.id);
+  const accessibility = document.querySelector('#map-layer').value === 'accessibility';
+  const data = accessibility ? accessibilityData : demandData;
+  if (!data || !document.querySelector('#demand-toggle').checked) return;
+  const n = (accessibility ? accessibilityByNta : demandByNta).get(feature.id);
   const tooltip = document.querySelector('#demand-tooltip');
   const fmt = (v) => v == null ? 'Missing data' : demandFormat.format(v);
-  tooltip.textContent = `${feature.properties.name}\nEstimated Licensed-Dog Demand: ${fmt(n?.estimatedDemand)}\nResidential units: ${fmt(n?.residentialUnits)}\nCovered units: ${fmt(n?.coveredResidentialUnits)}\nPer 1,000 covered units: ${fmt(n?.demandPer1000Units)}${n?.flags.partialCoverage ? '\nPartial coverage: invalid units or unknown ZIP.' : ''}\nModeled estimate; not observed dog locations.`;
+  tooltip.textContent = `${feature.properties.name}\nEstimated Licensed-Dog Demand: ${fmt(n?.estimatedDemand)}\nResidential units: ${fmt(n?.residentialUnits)}\nUnits with allocatable ZIP: ${fmt(n?.coveredResidentialUnits)}\nPer 1,000 allocatable units: ${fmt(n?.demandPer1000Units)}${n?.flags.partialCoverage ? '\nPartial coverage: invalid units or unknown ZIP.' : ''}\nModeled estimate; not observed dog locations.`;
+  if (document.querySelector('#map-layer').value === 'accessibility') {
+    tooltip.textContent = `${feature.properties.name}\nEstimated Licensed-Dog Demand\nTotal eligible demand: ${fmt(n?.accessibilityTotalDemand)}\nCovered (≤800m): ${fmt(n?.coveredDemand)}\nUncovered (>800m): ${fmt(n?.uncoveredDemand)}\nDemand-weighted coverage: ${n?.coveragePercentage == null ? 'N/A (zero or missing demand)' : fmt(n.coveragePercentage) + '%'}\n800m straight-line service radius, not walking distance.${n?.flags.partialCoverage ? '\nPartial source coverage: invalid units or unknown ZIP.' : ''}${n?.flags.noActiveDogRuns ? '\nNo active dog runs in the database.' : ''}\nModeled estimate; not observed dog locations.`;
+  }
   tooltip.hidden = false;
   const box = document.querySelector('.map-panel').getBoundingClientRect();
   tooltip.style.left = `${Math.max(8, Math.min(event.clientX - box.left + 14, box.width - tooltip.offsetWidth - 8))}px`;
   tooltip.style.top = `${Math.max(8, Math.min(event.clientY - box.top + 14, box.height - tooltip.offsetHeight - 8))}px`;
 }
-async function loadDemand() {
+function renderLayerStatus(kind, data) {
+  document.querySelector('#demand-status').textContent = layerStatus[kind];
   const quality = document.querySelector('#demand-quality');
-  try {
-    const response = await fetch('/api/dog-demand');
-    if (!response.ok) throw new Error('Demand request failed');
-    demandData = await response.json();
-    demandByNta = new Map(demandData.ntas.map((n) => [n.id, n]));
-    const s = demandData.summary;
-    quality.textContent = `${demandFormat.format(s.nta_demand)} of ${demandFormat.format(s.active_license_records)} deduplicated active license records mapped. Excluded: ${demandFormat.format(s.excluded_demand)} (${demandFormat.format(s.unallocatable_demand)} unallocatable by ZIP/units; ${demandFormat.format(s.missing_coordinate_demand)} missing coordinates; ${demandFormat.format(s.outside_nta_demand)} outside NTAs; ${demandFormat.format(s.ambiguous_nta_demand)} ambiguous). Residential parcels assigned: ${s.assigned_residential_parcels}/${s.residential_parcels}.`;
-    if (!Object.values(demandData.metadata.availability).every(Boolean)) quality.textContent += ' Required source data is missing.';
-    renderDemand();
-  } catch (error) {
-    quality.textContent = 'Demand unavailable. Dog-run exploration remains available.';
-    console.error(error);
+  if (!data) { quality.textContent = 'No prepared metrics to display for this layer. Other map features remain available.'; return; }
+  const s = data.summary;
+  quality.textContent = `${demandFormat.format(s.nta_demand)} of ${demandFormat.format(s.active_license_records)} active license records mapped. Excluded: ${demandFormat.format(s.excluded_demand)} (${demandFormat.format(s.unallocatable_demand)} unallocatable by ZIP/units; ${demandFormat.format(s.missing_coordinate_demand)} missing coordinates; ${demandFormat.format(s.outside_nta_demand)} outside NTAs; ${demandFormat.format(s.ambiguous_nta_demand)} ambiguous). Residential parcels assigned: ${s.assigned_residential_parcels}/${s.residential_parcels}.`;
+  if (kind === 'accessibility') {
+    const a = data.accessibilitySummary;
+    quality.textContent += ` Accessibility: ${demandFormat.format(a.nta_covered_demand)} covered and ${demandFormat.format(a.nta_uncovered_demand)} uncovered. Unassigned NTA demand: ${demandFormat.format(a.unassigned_nta_demand)}; invalid-location demand: ${demandFormat.format(a.invalid_location_demand)}. Conservation error: ${demandFormat.format(a.conservation_error)}.`;
   }
 }
+async function loadLayer(kind, url) {
+  const requestId = ++layerRequests[kind];
+  layerStatus[kind] = `Loading prepared ${kind} estimates…`;
+  renderDemand();
+  try {
+    const response = await fetch(url, { cache: 'no-store' });
+    const payload = await response.json();
+    if (requestId !== layerRequests[kind]) return;
+    if (!response.ok) {
+      const message = payload.status === 'stale' ? 'Source data changed. Estimates need to be refreshed.' : payload.status === 'not_ready' ? 'Estimates have not been prepared yet.' : 'Estimates are temporarily unavailable.';
+      throw new Error(message);
+    }
+    if (kind === 'demand') { demandData = payload; demandByNta = new Map(payload.ntas.map(n => [n.id, n])); }
+    else { accessibilityData = payload; accessibilityByNta = new Map(payload.ntas.map(n => [n.id, n])); }
+    layerStatus[kind] = `Prepared ${new Date(payload.metadata.computedAt).toLocaleString()}.`;
+  } catch (error) {
+    if (requestId !== layerRequests[kind]) return;
+    if (kind === 'demand') { demandData = null; demandByNta = new Map(); }
+    else { accessibilityData = null; accessibilityByNta = new Map(); }
+    layerStatus[kind] = `${error.message} Other map features remain available.`;
+  }
+  renderDemand();
+}
+async function loadDemand() { return loadLayer('demand', '/api/dog-demand'); }
+async function loadAccessibility() { return loadLayer('accessibility', '/api/dog-accessibility'); }
 document.querySelector('#demand-toggle').addEventListener('change', renderDemand);
 document.querySelector('#demand-metric').addEventListener('change', renderDemand);
+
+document.querySelector('#map-layer').addEventListener('change', renderDemand);
+
+document.querySelector('#reload-layers').addEventListener('click', () => { loadDemand(); loadAccessibility(); });

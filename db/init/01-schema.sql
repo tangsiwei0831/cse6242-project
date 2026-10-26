@@ -29,6 +29,9 @@ CREATE INDEX IF NOT EXISTS dog_runs_geometry_gix ON dog_runs USING gist (geometr
 CREATE INDEX IF NOT EXISTS dog_runs_borough_idx ON dog_runs (borough);
 CREATE INDEX IF NOT EXISTS dog_runs_zipcode_idx ON dog_runs (zipcode);
 CREATE INDEX IF NOT EXISTS dog_runs_feature_status_idx ON dog_runs (feature_status);
+CREATE INDEX IF NOT EXISTS dog_runs_active_geography_gix
+    ON dog_runs USING gist ((geometry::geography))
+    WHERE feature_status = 'Active';
 
 CREATE TABLE IF NOT EXISTS dog_licenses (
     license_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

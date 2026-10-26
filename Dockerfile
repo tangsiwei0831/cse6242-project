@@ -6,6 +6,7 @@ COPY db/pluto-schema.sql /usr/local/share/pluto-schema.sql
 COPY db/service-requests-311-schema.sql /docker-entrypoint-initdb.d/service-requests-311-schema.sql
 COPY db/service-requests-311-schema.sql /usr/local/share/service-requests-311-schema.sql
 COPY db/init/02-import-dog-runs.sh /docker-entrypoint-initdb.d/02-import-dog-runs.sh
+COPY web/sql/map-aggregates-schema.sql /docker-entrypoint-initdb.d/03-map-aggregates.sql
 COPY db/import-dog-runs.sh /usr/local/bin/import-dog-runs
 COPY db/import-dog-licenses.sh /usr/local/bin/import-dog-licenses
 COPY db/import-parks-recreation.sh /usr/local/bin/import-parks-recreation
