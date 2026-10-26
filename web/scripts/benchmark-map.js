@@ -13,7 +13,7 @@ const { validatePayload } = require('../lib/refresh-aggregates');
   const results = [];
   try {
     let demand;
-    for (const [kind, path] of [['demand','/api/dog-demand'], ['accessibility','/api/dog-accessibility']]) {
+    for (const [kind, path] of [['demand','/api/dog-demand'], ['accessibility','/api/dog-accessibility'], ['candidates','/api/candidate-parks']]) {
       let first;
       for (let i = 0; i < 2; i++) {
         const started = performance.now();
@@ -31,7 +31,10 @@ const { validatePayload } = require('../lib/refresh-aggregates');
       if (kind === 'demand') demand = first;
       else {
         assert.deepEqual(first.summary, demand.summary);
-        console.log(JSON.stringify({ demand: demand.summary, accessibility: first.accessibilitySummary }, null, 2));
+        if (kind === 'candidates') console.log(JSON.stringify({candidateSummary:first.candidateSummary,
+          top10:first.candidates.slice(0,10).map(c=>({rank:c.rank,id:c.id,name:c.name,borough:c.borough,incrementalDemand:c.incrementalDemand})),
+          uncertainSpatialOverlaps:first.uncertainSpatialOverlaps},null,2));
+        else console.log(JSON.stringify({ demand: demand.summary, accessibility: first.accessibilitySummary }, null, 2));
       }
     }
     for (const path of ['/api/health','/api/dog-runs','/api/dog-runs?borough=M','/api/neighborhoods']) {

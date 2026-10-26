@@ -48,9 +48,11 @@ fieldset { padding: 0; border: 0; }
 #map { display: block; width: 100%; height: 100%; cursor: grab; }
 #map:active { cursor: grabbing; }
 .neighborhood { fill: #f9faf5; stroke: #bdc9c0; stroke-width: .65; vector-effect: non-scaling-stroke; }
-.run-halo { fill: rgba(217, 239, 91, .45); }
-.run-point { fill: var(--green); stroke: #fff; stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: pointer; transition: r .15s; }
-.run-point:hover, .run-point.selected { fill: #b85c38; }
+.marker-hit-target { fill: transparent; stroke: none; pointer-events: all; }
+.run-halo { fill: none; stroke: var(--green); stroke-width: 1.25; opacity: 0; pointer-events: none; }
+.run.selected .run-halo, .run:hover .run-halo { opacity: .6; }
+.run-point { fill: var(--green); stroke: #fff; stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: pointer; }
+.run:hover .run-point, .run-point.selected { fill: #b85c38; }
 .loading { position: absolute; inset: 0; z-index: 4; display: grid; place-items: center; background: #e9eee7; color: var(--green); font-weight: 600; }
 .map-key { position: absolute; left: 18px; bottom: 16px; padding: 8px 12px; border-radius: 8px; background: rgba(255,253,248,.92); font-size: 11px; box-shadow: 0 4px 15px rgba(30,50,42,.12); }
 .map-key span { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--green); }
@@ -91,3 +93,18 @@ footer { padding: 18px 44px 28px; color: var(--muted); font-size: 11px; }
 .demand-legend strong { display: block; }
 .demand-ramp { height: 10px; margin: 6px 0; }
 .demand-tooltip { position: absolute; z-index: 5; max-width: min(290px, calc(100% - 16px)); padding: 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 15px #17352b33; font-size: 12px; line-height: 1.5; white-space: pre-line; pointer-events: none; }
+
+.candidate-point { fill: #7952a3; fill-opacity: .85; stroke: #fff; stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: pointer; }
+.candidate.selected .candidate-point, .candidate:hover .candidate-point, .candidate:focus .candidate-point { fill: #e06724; fill-opacity: 1; stroke: #17352b; stroke-width: 2; }
+.candidate-selection-ring { display: none; fill: #fffdf8; fill-opacity: .94; stroke: #e06724; stroke-width: 2; pointer-events: none; }
+.candidate.selected .candidate-selection-ring { display: block; }
+.marker-layer.has-selection .map-marker:not(.selected) .candidate-point { fill-opacity: .65; }
+.marker-layer.has-selection .map-marker:not(.selected) .run-point { fill-opacity: .8; }
+.candidate-key { position: absolute; left: 18px; top: 18px; max-width: calc(100% - 90px); padding: 8px; background: var(--paper); border-radius: 8px; color: #69458c; font-size: 11px; pointer-events: none; }
+#candidate-panel h2 { font: 700 20px "Fraunces", serif; }
+#candidate-panel p { font-size: 11px; line-height: 1.4; color: var(--muted); }
+.candidate-item { display: block; }
+.candidate-item.active { border-left: 3px solid #7952a3; }
+.candidate-detail { max-height: calc(100% - 40px); overflow-y: auto; }
+.candidate-detail dl { grid-template-columns: 1fr 1.6fr; }
+.candidate-detail p, #candidate-warnings { font-size: 11px; line-height: 1.5; }

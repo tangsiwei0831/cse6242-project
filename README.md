@@ -266,14 +266,15 @@ No importer changes are required. Optional maintenance commands:
 # Publish demand without waiting for accessibility.
 docker compose exec -T web node scripts/refresh-map-data.js --demand-only
 
-# Sufficient after changing only Dog Runs.
+# Refresh accessibility only (Dog Run changes also invalidate candidates).
 docker compose exec -T web node scripts/refresh-map-data.js --accessibility-only
 
 # Install schema/indexes without computing aggregates.
 docker compose exec -T web node scripts/refresh-map-data.js --install-only
 ```
 
-The default command publishes **demand first**, commits it, then prepares accessibility.
+The default command publishes **demand first**, commits it, then prepares accessibility
+and candidate rankings in separate transactions.
 Each calculation uses a repeatable-read transaction. Conservation validation must pass
 before a single atomic upsert publishes its result. A source-version check at publication
 rejects imports committed during calculation; rerun after imports finish. The final version
@@ -287,8 +288,8 @@ spatial calculations, or automatic refreshes.
 
 ### Persistence, API states, and cache invalidation
 
-`map_aggregate_snapshots` stores two durable aggregate JSON snapshots, keyed by `demand`
-and `accessibility`, plus revision, unique publication generation, timestamp, and duration.
+`map_aggregate_snapshots` stores three durable aggregate JSON snapshots, keyed by `demand`,
+`accessibility`, and `candidates`, plus revision, unique publication generation, timestamp, and duration.
 Only aggregate statistics are stored/returned; no animal attributes or individual license
 records are exposed. Snapshots survive web/database restarts.
 
@@ -296,11 +297,13 @@ records are exposed. Snapshots survive web/database restarts.
 | --- | --- |
 | `GET /api/dog-demand` | Demand-only NTA metrics, ZIP diagnostics, source availability, conservation summary |
 | `GET /api/dog-accessibility` | Accessibility metrics/summary plus the same demand diagnostics for its source snapshot |
+| `GET /api/candidate-parks` | Ranked hypothetical points, exclusions, geometry/source flags, uncertain overlaps, and shared demand/accessibility diagnostics |
 
 Statement triggers track normal inserts, updates, deletes, and truncates, including the
-existing import scripts. Licensing, PLUTO, and NTA changes invalidate both kinds; Dog Run
-changes invalidate accessibility only. Each kind has its own revision counter, so revision
-numbers across the two kinds need not be equal.
+existing import scripts. Licensing, PLUTO, and NTA changes invalidate all three kinds;
+Dog Run changes invalidate accessibility and candidates. Recreation-property changes
+invalidate candidates only. Each kind has its own revision counter, so revision numbers
+across kinds need not be equal.
 
 Every API read checks the current PostgreSQL source revision and published generation.
 An in-memory hit avoids transferring/parsing the stored JSON again; it never skips that
@@ -325,8 +328,9 @@ mixes demand data from one response with accessibility data from another.
 | --- | --- |
 | `web/sql/demand-base.sql` | Single shared ZIP → PLUTO → NTA model and demand diagnostics/payload |
 | `web/sql/dog-demand.sql` | Demand-only output, with no run-distance computation |
-| `web/sql/dog-accessibility.sql` | Exact 800m classification and accessibility aggregates |
-| `web/lib/queries.js` | Compose both queries from the shared definition |
+| `web/sql/accessibility-base.sql`, `web/sql/dog-accessibility.sql` | Shared exact 800m classification and accessibility aggregates/output |
+| `web/sql/candidate-parks.sql` | Property grouping, geometry repair, hypothetical points, and incremental-demand ranking |
+| `web/lib/queries.js` | Compose all queries from the shared definitions |
 | `web/sql/map-aggregates-schema.sql` | Snapshot/version tables, source triggers, parcel geography index |
 | `web/lib/refresh-aggregates.js` | Validation, consistent snapshots, atomic publication, refresh lock |
 | `web/lib/aggregate-store.js` | Revision/generation-aware API memory cache |
@@ -397,3 +401,147 @@ Final application-cache benchmark (a fresh app/pool; PostgreSQL buffers were not
 The first demand request includes connection/app startup overhead. These are local samples,
 not latency guarantees. `metadata.queryDurationMs` reports maintenance calculation time,
 not API read time; `computedAt`, `sourceRevision`, and `generation` identify its snapshot.
+
+
+## Candidate Park Ranking — preliminary screening
+
+Enable **Show hypothetical candidate locations** in the map sidebar. Purple diamonds
+show all candidates in the selected borough, and the list shows its top 10 with stable
+citywide ranks. Clicking a list item or diamond highlights it and opens its name, borough,
+property ID, rank, estimated incremental covered demand, and data-quality warnings.
+Candidate diamonds and Dog Run circles retain fixed screen-pixel sizes during zoom and
+pan. Selection raises the marker above both types and adds a contrasting candidate ring;
+unselected decorations are subdued without removing points. Transparent fixed-size hit
+areas preserve click targets. The top-10 list and native marker tooltips are unchanged.
+
+Existing dog-run markers, search, borough filters, demand metrics, accessibility, zoom,
+and detail cards remain available. Candidate points/list follow the borough filter;
+dog-run name/ZIP search does not change candidate rankings. Both layers can be shown
+at once. Reset/background click clears selections.
+
+**These points are hypothetical, not verified construction sites.** This is a first-run-
+per-park screening model, not a construction-feasibility assessment. It cannot establish
+available land, management permission, environmental suitability, access, or construction
+cost. Passive recreation space is not necessarily vacant or convertible land.
+
+### Candidate definition and geometry
+
+- Group by `gis_property_number`, never the importer-assigned `recreation_id`.
+- Screen properties with Neighborhood Park, Community Park, or Flagship Park types.
+  Combine all activity rows for each screened property; inconsistent type/name/borough
+  attributes remain flagged. Names containing "Playground" may still have an eligible
+  source property type; filtering is by the type field, not the name.
+- Exclude screened properties whose ID matches an **active** Dog Run property ID.
+  This conservative first-run-per-property policy does not evaluate additional runs
+  inside already-served large parks. Inactive runs neither exclude properties nor cover demand.
+- Repair invalid polygon geometry with `ST_MakeValid`, retain polygon components,
+  dissolve each property, normalize its geometry, and take one `ST_PointOnSurface`.
+  Source collection order is canonicalized before union. Empty, still-invalid, or
+  out-of-range geometries are reported in `geometryExclusions` rather than ranked.
+- Flag repaired/missing/multipart geometry, conflicting attributes, questionable acreage,
+  and uncertain active-run footprint intersections. Spatial overlaps are reported in
+  `uncertainSpatialOverlaps`; they do **not** automatically exclude a property.
+  An interior point is not necessarily a feasible or accessible placement, and one point
+  may poorly represent a large or disconnected park. Source geometry is not overwritten.
+
+### Incremental-demand model
+
+Candidate queries use exactly the same `demand-base.sql` allocation and
+`accessibility-base.sql` active-run coverage as the other layers, within one consistent
+source transaction. They do not use a separate licensing model or rely on an older
+persisted accessibility snapshot.
+
+For each candidate point, sum only allocatable parcel demand that is **currently
+uncovered** by active runs and newly lies within **800m straight-line spheroidal geography
+distance** of that point. Already-covered demand contributes zero. An index prefilter has
+a 0.0000001m roundoff margin; the final `ST_Distance(..., true) <= 800` check preserves the
+800m limit, including point-projection roundoff at exactly 800m. No geometry-degree
+threshold or walking-distance interpretation is used.
+
+The primary `incrementalDemand` metric includes valid-location demand without a unique
+NTA, consistently with the global accessibility totals. Its NTA-attributable and unassigned
+portions are reported as `incrementalNtaDemand` and `incrementalUnassignedNtaDemand`.
+Missing-coordinate demand is never relocated to candidates. Nearby invalid-unit and
+unallocatable-ZIP parcels are counted in `sourceCoverage` and flagged; their unknown
+weights are not silently redistributed. Shared ZIP/NTA conservation and exclusion
+summaries remain included in the candidate payload.
+
+Rank by incremental demand descending, breaking exact ties by property ID with C collation.
+Within the same PostGIS/GEOS version and unchanged source geometry, input row ordering
+does not change the canonical representative point or ranking; a fixture verifies this
+by reversing source rows. Source updates, geometry-library changes, or alternative point
+placements may change ranks.
+
+**Each candidate is an independent scenario. Gains overlap and are not additive.** The
+sum of the top 10 is not the benefit of building 10 runs. A future multi-site optimization
+would need to recompute marginal gains after each selected site. This implementation
+performs no such portfolio optimization and does not screen engineering feasibility.
+
+### Preparation, persistence, and validation
+
+```bash
+# Prepare only candidates after a parks import or model change.
+docker compose exec -T web node scripts/refresh-map-data.js --candidates-only
+
+# Prepare demand, accessibility, and then candidates.
+docker compose exec -T web node scripts/refresh-map-data.js
+
+# All fixture, UI, migration, and cache tests.
+docker compose exec -T web env RUN_DB_TESTS=1 npm test
+
+# Fresh-app cache misses/hits for all three APIs; includes candidate diagnostics/top 10.
+docker compose exec -T web node scripts/benchmark-map.js
+```
+
+The first candidate refresh extends the original snapshot-kind constraint and adds a
+candidate source-version row without replacing existing snapshots. The schema installer
+also adds the recreation-table invalidation trigger. Normal parks imports invalidate only
+candidates; changes to the shared demand sources invalidate all three kinds. Missing parks
+data prevents candidate publication while demand/accessibility can still be prepared with
+their individual commands. Default refresh can publish earlier stages even if a later
+stage fails. Each stage retains the existing advisory-lock, revision-check, conservation,
+and atomic-publication safeguards. No source data needs to be deleted or reimported.
+
+`GET /api/candidate-parks` only reads the prepared snapshot. It shares the existing
+revision/generation-aware cache and `not_ready`/`stale` behavior. Candidate fetching is
+independent of the other layers, and stale/unprepared rankings show a loading/error state
+rather than triggering expensive spatial work. Click **Reload estimates** after refresh.
+
+Validation checks unique property IDs, active-ID exclusions, interior representative
+points, per-candidate incremental demand bounded by currently uncovered demand, NTA
+attribution conservation, and descending sequential ranks. Fixtures cover overlapping
+candidate gains, repaired geometry, rejected geometry, retained uncertain overlaps,
+inactive runs, already-covered demand, 799.9m/800m/800.1m, source row reordering, and
+source-coverage flags. UI tests check candidate card contents and borough filtering without
+reranking. Real database tests also check upgrade of the prior two-kind schema, preserved
+source revisions, durable candidate snapshots, and parks-only cache invalidation.
+
+### Local results and performance
+
+The prepared dataset has **359 unique ranked properties**, from **415 screened** and
+**56 active-property exclusions**. All representative points lie inside their repaired,
+combined property geometry. **15 properties required repair**, **one uncertain spatial
+overlap was retained** (Isham Park, `M043`), and no property was excluded for unusable final
+geometry. Global uncovered demand remains **37,929.455289**, and existing demand and
+accessibility totals are unchanged.
+
+Candidate computation took **234,729ms (3m 54.7s)**, entirely outside map requests. A fresh
+application-cache miss took **38.96ms** and a hit **10.36ms**, including JSON transfer and
+validation in the benchmark. PostgreSQL buffers were not reset; these are local samples,
+not latency guarantees. The full calculation remains substantial background work.
+
+| Rank | Property | Park | Incremental estimated licensed-dog demand |
+| --- | --- | --- | ---: |
+| 1 | M294 | Ruppert Park | 1,145.19 |
+| 2 | B592 | Betty Carter Park | 902.72 |
+| 3 | B032 | Fort Greene Park | 792.55 |
+| 4 | M215 | Cherry Tree Park | 788.08 |
+| 5 | B026 | Cuyler Gore Park | 723.22 |
+| 6 | B407 | South Oxford Park | 694.36 |
+| 7 | M257 | Clement Clarke Moore Park | 677.61 |
+| 8 | B232 | Dean Playground | 669.75 |
+| 9 | M249 | Penn South Playground | 666.99 |
+| 10 | M192 | Stanley Isaacs Playground | 656.86 |
+
+All **15 automated tests** and live API checks passed. No browser was connected for a
+visual layout/pointer/zoom check; the UI tests do not replace that manual verification.

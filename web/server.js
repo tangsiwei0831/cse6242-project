@@ -79,7 +79,7 @@ function createApp(pool) {
   });
 
   // GETs only read published aggregates. They never run spatial SQL or refreshes.
-  for (const [route, kind] of [['/api/dog-demand', 'demand'], ['/api/dog-accessibility', 'accessibility']]) {
+  for (const [route, kind] of [['/api/dog-demand', 'demand'], ['/api/dog-accessibility', 'accessibility'], ['/api/candidate-parks', 'candidates']]) {
     app.get(route, async (_request, response, next) => {
       response.set('Cache-Control', 'no-store');
       try {

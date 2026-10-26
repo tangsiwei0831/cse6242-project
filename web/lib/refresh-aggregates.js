@@ -10,7 +10,7 @@ function validatePayload(payload, kind) {
   near(s.conservation_error, 0, 'ZIP allocation');
   near(s.spatial_conservation_error, 0, 'NTA assignment');
   for (const z of payload.zipDiagnostics.filter(z => z.status === 'allocatable')) near(z.dogs, z.allocated_demand, 'ZIP ' + z.zip);
-  if (kind !== 'accessibility') return;
+  if (!['accessibility', 'candidates'].includes(kind)) return;
   const a = payload.accessibilitySummary;
   for (const key of ['conservation_error', 'nta_conservation_error', 'allocation_conservation_error']) near(a[key], 0, key);
   near(a.eligible_demand, a.nta_total_demand + a.unassigned_nta_demand, 'unassigned NTA accounting');
@@ -24,10 +24,23 @@ function validatePayload(payload, kind) {
     sum += n.accessibilityTotalDemand;
   }
   near(sum, a.nta_total_demand, 'NTA totals');
+  if (kind === 'candidates') {
+    const ids = new Set();
+    const excluded = new Set(payload.excludedProperties.map(p => p.id));
+    let previous = Infinity;
+    for (const [i, c] of payload.candidates.entries()) {
+      if (ids.has(c.id) || excluded.has(c.id) || c.rank !== i + 1) throw new Error('Invalid candidate identity/exclusion/rank');
+      if (!Number.isFinite(c.incrementalDemand) || c.incrementalDemand < 0 || c.incrementalDemand > a.uncovered_demand + 1e-7 || c.incrementalDemand > previous + 1e-7) throw new Error('Invalid incremental demand');
+      if (!Number.isFinite(c.longitude) || !Number.isFinite(c.latitude) || Math.abs(c.longitude)>180 || Math.abs(c.latitude)>90) throw new Error('Invalid candidate point');
+      near(c.incrementalNtaDemand + c.incrementalUnassignedNtaDemand, c.incrementalDemand, 'candidate NTA attribution');
+      ids.add(c.id); previous = c.incrementalDemand;
+    }
+    if (payload.candidateSummary.rankableProperties !== ids.size || !payload.candidateSummary.pointsInsideProperties) throw new Error('Candidate geometry/count validation failed');
+  }
 }
 
 async function refreshKind(client, kind, compute = () => client.query(queries[kind])) {
-  if (!['demand', 'accessibility'].includes(kind)) throw new Error('Unknown aggregate kind');
+  if (!['demand', 'accessibility', 'candidates'].includes(kind)) throw new Error('Unknown aggregate kind');
   const started = Date.now();
   await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
   try {

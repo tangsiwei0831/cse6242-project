@@ -6,7 +6,7 @@ const { createApp } = require('../server');
 const { runRefresh } = require('../lib/refresh-aggregates');
 
 function database() {
-  const rows = { demand: { revision: '1' }, accessibility: { revision: '1' } };
+  const rows = { demand: { revision: '1' }, accessibility: { revision: '1' }, candidates: { revision: '1' } };
   let calls = 0;
   return { rows, get calls() { return calls; },
     publish(kind, generation, value) {
@@ -75,6 +75,13 @@ test('HTTP demand is independent from unprepared/stale accessibility; GETs do no
     assert.equal((await fetch(url + '/api/dog-accessibility')).status, 200);
     db.rows.accessibility.revision = '2';
     assert.equal((await fetch(url + '/api/dog-accessibility')).status, 503);
+    assert.equal((await fetch(url + '/api/dog-demand')).status, 200);
+    assert.equal((await fetch(url + '/api/candidate-parks')).status, 503);
+    db.publish('candidates','p1',30);
+    assert.equal((await fetch(url + '/api/candidate-parks')).status, 200);
+    assert.equal((await fetch(url + '/api/candidate-parks')).headers.get('X-Aggregate-Cache'), 'hit');
+    db.rows.candidates.revision = '2';
+    assert.equal((await fetch(url + '/api/candidate-parks')).status, 503);
     assert.equal((await fetch(url + '/api/dog-demand')).status, 200);
     const html = await fetch(url + '/');
     assert.equal(html.status, 200);

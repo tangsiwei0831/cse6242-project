@@ -58,6 +58,17 @@
             <button id="reload-layers" type="button">Reload estimates</button>
             <details><summary>Data coverage</summary><p id="demand-quality" aria-live="polite">Loading demand…</p></details>
           </fieldset>
+          <fieldset class="demand-controls">
+            <legend>Candidate Parks · preliminary screening</legend>
+            <label><input id="candidate-toggle" type="checkbox"> Show hypothetical candidate locations</label>
+            <p>One interior point per screened park property. Not verified construction sites or a construction-feasibility assessment. Gains use an 800m straight-line radius, not walking distance.</p>
+          </fieldset>
+          <section id="candidate-panel" hidden aria-label="Ranked hypothetical candidate parks">
+            <h2 id="candidate-list-title">Top 10 candidate parks</h2>
+            <p id="candidate-status" role="status">Loading prepared candidates…</p>
+            <p id="candidate-summary"></p>
+            <div id="candidate-list"></div>
+          </section>
           <div class="results-heading">
             <h2>Places</h2>
             <button id="reset-view" type="button">Reset map</button>
@@ -70,11 +81,21 @@
           <svg id="map" role="img" aria-label="Map of active dog runs in New York City"></svg>
           <div id="demand-legend" class="demand-legend" aria-live="polite"></div>
           <div id="demand-tooltip" class="demand-tooltip" role="tooltip" hidden></div>
+          <div id="candidate-key" class="candidate-key" hidden>◆ Hypothetical candidate · not a verified site</div>
           <div class="map-key"><span></span> Active dog run</div>
           <div class="zoom-controls" aria-label="Map zoom controls">
             <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
             <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
           </div>
+          <article id="candidate-detail" class="detail-card candidate-detail" hidden>
+            <button id="close-candidate" class="close" type="button" aria-label="Close candidate details">×</button>
+            <p class="detail-kicker">HYPOTHETICAL CANDIDATE LOCATION</p>
+            <h2 id="candidate-name"></h2>
+            <p id="candidate-location" class="detail-location"></p>
+            <dl><div><dt>Rank</dt><dd id="candidate-rank"></dd></div><div><dt>Newly covered estimated licensed-dog demand</dt><dd id="candidate-gain"></dd></div></dl>
+            <ul id="candidate-warnings"></ul>
+            <p>Preliminary screening, not verified construction feasibility. 800m straight-line radius, not walking distance. Candidate gains are independent and must not be added together.</p>
+          </article>
           <article id="detail-card" class="detail-card" hidden>
             <button id="close-detail" class="close" type="button" aria-label="Close details">×</button>
             <p class="detail-kicker">ACTIVE DOG RUN</p>
@@ -93,5 +114,6 @@
     </main>
     <script src="/vendor/d3/d3.min.js"></script>
     <script src="app.js"></script>
+    <script src="candidates.js"></script>
   </body>
 </html>

@@ -4,7 +4,8 @@ const state = { runs: [], neighborhoods: null, borough: 'ALL', query: '', select
 const svg = d3.select('#map');
 const mapRoot = svg.append('g');
 const neighborhoodLayer = mapRoot.append('g');
-const runLayer = mapRoot.append('g');
+// Both marker types share a parent so the selected marker can sit above either.
+const markerLayer = mapRoot.append('g').attr('class', 'marker-layer');
 const loading = document.querySelector('#loading');
 const list = document.querySelector('#run-list');
 const detail = document.querySelector('#detail-card');
@@ -16,9 +17,32 @@ const layerStatus = { demand: 'Loading prepared demand estimates…', accessibil
 const layerRequests = { demand: 0, accessibility: 0 };
 let projection;
 let path;
+let mapTransform = d3.zoomIdentity;
 
-const zoom = d3.zoom().scaleExtent([1, 12]).on('zoom', (event) => mapRoot.attr('transform', event.transform));
+const zoom = d3.zoom().scaleExtent([1, 12]).on('zoom', handleMapZoom);
 svg.call(zoom);
+
+// Keep each marker anchored in map coordinates, but cancel its inherited zoom
+// scale. A glyph/hit target thus keeps the same size in SVG screen pixels.
+function markerTransform(longitude, latitude) {
+  const [x, y] = projection([longitude, latitude]);
+  return `translate(${x},${y}) scale(${1 / mapTransform.k})`;
+}
+function handleMapZoom(event) {
+  mapTransform = event.transform;
+  mapRoot.attr('transform', mapTransform);
+  markerLayer.selectAll('g.run').attr('transform', run => markerTransform(run.properties.longitude, run.properties.latitude));
+  if (typeof updateCandidateMarkerPositions === 'function') updateCandidateMarkerPositions();
+}
+function raiseSelectedMarkers() {
+  const selected = markerLayer.selectAll('g.map-marker.selected');
+  markerLayer.classed('has-selection', !selected.empty());
+  selected.raise();
+}
+function handleRunMarkerClick(event, run) {
+  event.stopPropagation();
+  selectRun(run, false);
+}
 
 function filteredRuns() {
   const term = state.query.trim().toLowerCase();
@@ -57,22 +81,27 @@ function render() {
   items.select('small').text((run) => `${boroughNames[run.properties.borough]} · ${run.properties.zipcode || 'ZIP unavailable'}`);
   d3.select(list).selectAll('p.empty').data(runs.length ? [] : [null]).join('p').attr('class', 'empty').text('No dog runs match your search.');
 
-  const points = runLayer.selectAll('g.run').data(runs, (run) => run.id).join(
+  const points = markerLayer.selectAll('g.run').data(runs, (run) => run.id).join(
     (enter) => {
-      const group = enter.append('g').attr('class', 'run');
-      group.append('circle').attr('class', 'run-halo').attr('r', 9);
+      const group = enter.append('g').attr('class', 'run map-marker');
+      group.append('circle').attr('class', 'marker-hit-target').attr('r', 9);
+      group.append('circle').attr('class', 'run-halo').attr('r', 7.5);
       group.append('circle').attr('class', 'run-point').attr('r', 4.5);
       return group;
     },
     (update) => update,
     (exit) => exit.remove()
   );
-  points.attr('transform', (run) => `translate(${projection([run.properties.longitude, run.properties.latitude])})`)
-    .on('click', (event, run) => { event.stopPropagation(); selectRun(run, false); });
+  points.attr('transform', run => markerTransform(run.properties.longitude, run.properties.latitude))
+    .classed('selected', run => run.id === state.selected)
+    .on('click', handleRunMarkerClick);
   points.select('.run-point').classed('selected', (run) => run.id === state.selected);
+  if (typeof renderCandidates === 'function') renderCandidates();
+  raiseSelectedMarkers();
 }
 
 function selectRun(run, moveMap) {
+  if (typeof clearCandidateSelection === 'function') clearCandidateSelection();
   state.selected = run.id;
   const p = run.properties;
   document.querySelector('#detail-name').textContent = p.name;
@@ -92,6 +121,7 @@ function selectRun(run, moveMap) {
 }
 
 function resetView() {
+  if (typeof clearCandidateSelection === 'function') clearCandidateSelection();
   state.selected = null;
   detail.hidden = true;
   svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
@@ -130,7 +160,7 @@ document.querySelector('#close-detail').addEventListener('click', () => { state.
 document.querySelector('#reset-view').addEventListener('click', resetView);
 document.querySelector('#zoom-in').addEventListener('click', () => svg.transition().call(zoom.scaleBy, 1.5));
 document.querySelector('#zoom-out').addEventListener('click', () => svg.transition().call(zoom.scaleBy, 0.67));
-svg.on('click', () => { state.selected = null; detail.hidden = true; render(); });
+svg.on('click', () => { if (typeof clearCandidateSelection === 'function') clearCandidateSelection(); state.selected = null; detail.hidden = true; render(); });
 window.addEventListener('resize', () => { if (state.neighborhoods) drawMap(); });
 
 init();
