@@ -78,6 +78,7 @@ fieldset { padding: 0; border: 0; }
 .neighborhood { fill: #f9faf5; stroke: #bdc9c0; stroke-width: .65; vector-effect: non-scaling-stroke; }
 .neighborhood.density-area { cursor: pointer; }
 .neighborhood.density-area:hover, .neighborhood.density-area.selected { stroke: #17352b; stroke-width: 2; }
+.neighborhood.search-match { stroke: #17352b; stroke-width: 2; }
 .park-marker { cursor: pointer; }
 .park-point { fill: #e45f4f; fill-opacity: .82; stroke: #fffdf8; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .park-marker:hover .park-point, .park-marker.selected .park-point { fill: #b8322a; stroke: #17352b; }
@@ -100,7 +101,15 @@ fieldset { padding: 0; border: 0; }
 .legend-title { margin-bottom: 7px; font-weight: 700; }
 .legend-gradient { height: 8px; border-radius: 4px; background: linear-gradient(90deg, #ffffe5, #addd8e, #41ab5d, #005a32); }
 .legend-values { display: flex; justify-content: space-between; margin-top: 4px; color: var(--muted); }
-.map-tooltip { position: absolute; z-index: 3; pointer-events: none; padding: 8px 10px; border-radius: 7px; color: #fff; background: rgba(23,53,43,.94); font-size: 11px; line-height: 1.45; box-shadow: 0 5px 15px rgba(0,0,0,.18); }
+.map-tooltip { position: absolute; z-index: 3; width: 250px; pointer-events: none; padding: 12px; border-radius: 10px; color: #fff; background: rgba(23,53,43,.96); font-size: 11px; line-height: 1.35; box-shadow: 0 8px 22px rgba(0,0,0,.2); }
+.area-tooltip-header { padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,.18); }
+.area-tooltip-header strong, .area-tooltip-header small { display: block; }
+.area-tooltip-header strong { font-size: 13px; }
+.area-tooltip-header small { margin-top: 2px; color: rgba(255,255,255,.7); font-size: 9px; }
+.area-metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; padding-top: 9px; }
+.area-metric-grid span, .area-metric-grid b { display: block; }
+.area-metric-grid span { color: rgba(255,255,255,.68); font-size: 9px; }
+.area-metric-grid b { margin-top: 1px; font-size: 12px; }
 .zoom-controls { position: absolute; top: 18px; right: 18px; display: grid; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; box-shadow: 0 4px 15px rgba(30,50,42,.12); }
 .zoom-controls button { width: 38px; height: 36px; border: 0; border-bottom: 1px solid var(--line); color: var(--ink); background: var(--paper); cursor: pointer; font-size: 20px; }
 .zoom-controls button:last-child { border: 0; }

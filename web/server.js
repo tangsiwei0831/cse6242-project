@@ -199,15 +199,54 @@ async function loadLicenseDensity() {
       FROM zip_weights w
       JOIN license_zip l ON l.zipcode = w.postcode
       GROUP BY w.nta2020
+    ), run_stats AS (
+      SELECT n.nta2020, count(DISTINCT d.object_id)::integer AS dog_run_count
+      FROM nta_2020 n
+      JOIN dog_runs d ON d.feature_status = 'Active' AND ST_Intersects(n.geometry, d.geometry)
+      GROUP BY n.nta2020
+    ), park_properties AS (
+      SELECT gis_property_number, max(open_space_acres) AS acres,
+             ST_Multi(ST_UnaryUnion(ST_Collect(geometry))) AS geometry
+      FROM parks_recreation
+      GROUP BY gis_property_number
+    ), park_assignments AS (
+      SELECT n.nta2020, p.acres,
+             EXISTS (
+               SELECT 1 FROM dog_runs d
+               WHERE d.feature_status = 'Active'
+                 AND (d.gis_property_number = p.gis_property_number OR ST_Intersects(d.geometry, p.geometry))
+             ) AS has_dog_run
+      FROM park_properties p
+      LEFT JOIN nta_2020 n ON ST_Covers(n.geometry, ST_PointOnSurface(p.geometry))
+    ), park_stats AS (
+      SELECT nta2020,
+             count(*) FILTER (WHERE NOT has_dog_run)::integer AS parks_without_runs,
+             coalesce(sum(acres), 0) AS park_acres
+      FROM park_assignments
+      WHERE nta2020 IS NOT NULL
+      GROUP BY nta2020
+    ), complaint_stats AS (
+      SELECT n.nta2020, count(*)::integer AS complaint_count
+      FROM service_requests_311 s
+      JOIN nta_2020 n ON ST_Covers(n.geometry, s.location)
+      WHERE s.location IS NOT NULL
+      GROUP BY n.nta2020
     )
     SELECT n.nta2020, n.ntaname, n.boroname,
            latest.extract_year,
            coalesce(e.licenses, 0) AS licenses,
            ST_Area(n.geometry::geography) / 1000000.0 AS area_sq_km,
-           coalesce(e.licenses, 0) / nullif(ST_Area(n.geometry::geography) / 1000000.0, 0) AS density
+           coalesce(e.licenses, 0) / nullif(ST_Area(n.geometry::geography) / 1000000.0, 0) AS density,
+           coalesce(r.dog_run_count, 0) AS dog_run_count,
+           coalesce(p.parks_without_runs, 0) AS parks_without_runs,
+           coalesce(p.park_acres, 0) AS park_acres,
+           coalesce(c.complaint_count, 0) AS complaint_count
     FROM nta_2020 n
     CROSS JOIN latest
     LEFT JOIN estimated e ON e.nta2020 = n.nta2020
+    LEFT JOIN run_stats r ON r.nta2020 = n.nta2020
+    LEFT JOIN park_stats p ON p.nta2020 = n.nta2020
+    LEFT JOIN complaint_stats c ON c.nta2020 = n.nta2020
     ORDER BY n.nta2020
   `);
 
@@ -217,7 +256,11 @@ async function loadLicenseDensity() {
     borough: row.boroname,
     licenses: Math.round(Number(row.licenses)),
     areaSqKm: Number(row.area_sq_km),
-    density: Number(row.density)
+    density: Number(row.density),
+    dogRuns: Number(row.dog_run_count),
+    parksWithoutRuns: Number(row.parks_without_runs),
+    parkAcres: Number(row.park_acres),
+    complaints311: Number(row.complaint_count)
   }));
   return {
     year: Number(result.rows[0]?.extract_year),
