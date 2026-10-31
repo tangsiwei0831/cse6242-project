@@ -1,34 +1,58 @@
-const boroughNames = { B: 'Brooklyn', M: 'Manhattan', Q: 'Queens', R: 'Staten Island', X: 'Bronx' };
+const boroughNames = ['Bronx', 'Brooklyn', 'Manhattan', 'Queens', 'Staten Island'];
 const state = {
-  runs: [], parks: null, neighborhoods: null, density: null, complaints: null, opportunities: null,
-  layers: { runs: true, density: true, parks: true, complaints: false, ranking: true },
+  neighborhoods: null, density: null, complaints: null, opportunities: null,
+  layers: { candidate: true, density: true, complaints: false },
+  includeExisting: false,
   borough: 'ALL', query: '', selected: null, selectedType: null, searchArea: null
 };
 
 const svg = d3.select('#map');
 const mapRoot = svg.append('g');
 const neighborhoodLayer = mapRoot.append('g');
-const parkLayer = mapRoot.append('g');
+const candidateLayer = mapRoot.append('g');
 const complaintLayer = mapRoot.append('g');
-const rankingLayer = mapRoot.append('g');
-const runLayer = mapRoot.append('g');
 const loading = document.querySelector('#loading');
-const list = document.querySelector('#run-list');
+const list = document.querySelector('#candidate-list');
+const existingList = document.querySelector('#existing-park-list');
+const densityList = document.querySelector('#density-list');
 const detail = document.querySelector('#detail-card');
 const tooltip = document.querySelector('#map-tooltip');
 let projection;
 let path;
+let opportunityRequestId = 0;
 
 const zoom = d3.zoom().scaleExtent([1, 12]).on('zoom', (event) => mapRoot.attr('transform', event.transform));
 svg.call(zoom);
 
-function filteredRuns() {
+function eligibleCandidates() {
+  if (!state.opportunities) return [];
+  return state.opportunities.features.filter((candidate) => candidate.properties.score !== null);
+}
+
+function filteredCandidates() {
   const term = state.query.trim().toLowerCase();
-  return state.runs.filter((run) => {
-    const boroughMatch = state.borough === 'ALL' || run.properties.borough === state.borough;
-    const textMatch = !term || run.properties.name.toLowerCase().includes(term) || (run.properties.zipcode || '').includes(term);
-    return boroughMatch && textMatch;
+  return eligibleCandidates().filter((candidate) => {
+    return matchesParkFilter(candidate, term);
   });
+}
+
+function filteredExistingParks() {
+  const term = state.query.trim().toLowerCase();
+  return (state.opportunities?.features || []).filter((candidate) =>
+    candidate.properties.hasDogRun && matchesParkFilter(candidate, term));
+}
+
+function matchesParkFilter(candidate, term) {
+  const p = candidate.properties;
+  const boroughMatch = state.borough === 'ALL' || p.borough === state.borough;
+  const textMatch = !term || p.name.toLowerCase().includes(term) || String(p.propertyId).toLowerCase().includes(term);
+  return boroughMatch && textMatch;
+}
+
+function topCount() {
+  const input = document.querySelector('#top-park-count');
+  const count = Number(input.value);
+  return Number.isInteger(count) && count >= 1 ? count : null;
 }
 
 function densityContext() {
@@ -43,8 +67,9 @@ function densityContext() {
 }
 
 function renderFilters() {
-  const counts = d3.rollup(state.runs, (values) => values.length, (run) => run.properties.borough);
-  const filters = [['ALL', 'All', state.runs.length], ...Object.entries(boroughNames).map(([code, name]) => [code, name, counts.get(code) || 0])];
+  const candidates = eligibleCandidates();
+  const counts = d3.rollup(candidates, (values) => values.length, (candidate) => candidate.properties.borough);
+  const filters = [['ALL', 'All', candidates.length], ...boroughNames.map((name) => [name, name, counts.get(name) || 0])];
   d3.select('#borough-filters').selectAll('button').data(filters).join('button')
     .attr('type', 'button')
     .attr('class', ([code]) => `filter${state.borough === code ? ' active' : ''}`)
@@ -55,12 +80,9 @@ function renderFilters() {
 
 function render() {
   renderNeighborhoods();
-  renderParks();
+  renderCandidateParks();
   renderComplaints();
-  renderRankings();
-  renderRuns();
   renderSidebar();
-  renderCandidateList();
   renderLegends();
 }
 
@@ -95,7 +117,7 @@ function renderNeighborhoods() {
         ['Licenses / km²', d3.format(',.0f')(area.density)],
         ['Active dog runs', d3.format(',')(area.dogRuns)],
         ['Parks without runs', d3.format(',')(area.parksWithoutRuns)],
-        ['311 requests', d3.format(',')(area.complaints311)],
+        ['Dog-related complaints', d3.format(',')(area.complaints311)],
         ['Park acreage', d3.format(',.1f')(area.parkAcres)]
       ].forEach(([label, value]) => {
         const item = document.createElement('div');
@@ -111,26 +133,79 @@ function renderNeighborhoods() {
     .on('mouseleave', () => { tooltip.hidden = true; });
 }
 
-function renderParks() {
-  if (!state.parks || !projection) return;
-  const visibleParks = state.layers.parks ? state.parks.features : [];
-  const parks = parkLayer.selectAll('g.park-marker').data(visibleParks, (feature) => feature.id).join(
+function renderCandidateParks() {
+  if (!state.opportunities || !projection) return;
+  const features = state.layers.candidate ? state.opportunities.features : [];
+  const markers = candidateLayer.selectAll('g.candidate-park').data(features, (feature) => feature.id).join(
     (enter) => {
-      const marker = enter.append('g').attr('class', 'park-marker');
-      marker.append('rect').attr('class', 'park-point').attr('x', -3.5).attr('y', -3.5).attr('width', 7).attr('height', 7).attr('rx', 1.5);
-      marker.append('title');
+      const marker = enter.append('g').attr('class', 'candidate-park');
+      marker.append('rect').attr('class', 'candidate-park-point').attr('x', -4).attr('y', -4).attr('width', 8).attr('height', 8).attr('rx', 1);
+      marker.append('text').attr('class', 'candidate-park-rank').attr('text-anchor', 'middle').attr('dy', '.35em');
       return marker;
     },
     (update) => update,
     (exit) => exit.remove()
   )
     .attr('transform', (feature) => `translate(${projection(feature.geometry.coordinates)})`)
-    .classed('selected', (feature) => state.selectedType === 'park' && feature.id === state.selected)
+    .classed('has-existing-run', (feature) => feature.properties.hasDogRun)
+    .classed('selected', (feature) => state.selectedType === 'candidate' && feature.id === state.selected)
     .on('click', (event, feature) => {
       event.stopPropagation();
-      selectPark(feature);
-    });
-  parks.select('title').text((feature) => `${feature.properties.name}${feature.properties.type ? ` · ${feature.properties.type}` : ''}`);
+      selectCandidate(feature);
+    })
+    .on('mousemove', showCandidateTooltip)
+    .on('mouseleave', () => { tooltip.hidden = true; });
+  markers.select('.candidate-park-rank')
+    .text((feature) => feature.properties.rank <= (topCount() || 0) ? feature.properties.rank : '');
+}
+
+function showCandidateTooltip(event, candidate) {
+  const p = candidate.properties;
+  tooltip.hidden = false;
+  tooltip.style.left = `${event.offsetX + 14}px`;
+  tooltip.style.top = `${event.offsetY + 14}px`;
+  tooltip.replaceChildren();
+
+  const header = document.createElement('div');
+  header.className = 'area-tooltip-header';
+  const name = document.createElement('strong');
+  name.textContent = p.name;
+  const meta = document.createElement('small');
+  meta.textContent = `${p.borough || 'NYC'} · ${p.hasDogRun ? 'Existing dog run' : 'No mapped dog run'}`;
+  header.append(name, meta);
+
+  const grid = document.createElement('div');
+  grid.className = 'area-metric-grid';
+  [
+    ['Rank', p.rank === null ? 'Not ranked' : `#${p.rank}`],
+    ['Score', p.score === null ? 'Excluded' : `${p.score} / 100`],
+    ['Park acreage', `${p.acres.toFixed(1)} acres`],
+    ['Nearest run', `${p.nearestRunKm.toFixed(2)} km`],
+    ['Est. licenses', d3.format(',')(p.licenseEstimate)],
+    ['Dog-related complaints', d3.format(',')(p.complaintCount)]
+  ].forEach(([label, value]) => {
+    const item = document.createElement('div');
+    const labelNode = document.createElement('span');
+    const valueNode = document.createElement('b');
+    labelNode.textContent = label;
+    valueNode.textContent = value;
+    item.append(labelNode, valueNode);
+    grid.append(item);
+  });
+  tooltip.append(header, grid);
+
+  if (p.factors) {
+    const strongest = Object.entries(p.factors).sort((a, b) => d3.descending(a[1], b[1]))[0];
+    const insight = document.createElement('p');
+    insight.className = 'park-tooltip-insight';
+    insight.textContent = `Strongest scoring factor: ${{
+      demand: 'dog-run demand',
+      access: 'access gap',
+      complaints: 'dog-related complaints',
+      acreage: 'park acreage'
+    }[strongest[0]]} (${strongest[1].toFixed(0)} / 100).`;
+    tooltip.append(insight);
+  }
 }
 
 function renderComplaints() {
@@ -142,82 +217,37 @@ function renderComplaints() {
     .attr('transform', (cell) => `translate(${projection(cell.geometry.coordinates)})`)
     .attr('r', (cell) => radius(cell.properties.complaintCount));
   points.selectAll('title').data((cell) => [cell]).join('title')
-    .text((cell) => `${cell.properties.complaintCount} dog-related 311 request${cell.properties.complaintCount === 1 ? '' : 's'} · ${cell.properties.neighborhood || 'NYC'}`);
-}
-
-function renderRankings() {
-  if (!state.opportunities || !projection) return;
-  const candidates = state.layers.ranking ? state.opportunities.features.slice(0, 8) : [];
-  const markers = rankingLayer.selectAll('g.rank-marker').data(candidates, (candidate) => candidate.id).join(
-    (enter) => {
-      const marker = enter.append('g').attr('class', 'rank-marker');
-      marker.append('rect').attr('class', 'rank-point').attr('x', -7).attr('y', -7).attr('width', 14).attr('height', 14).attr('rx', 3);
-      marker.append('text').attr('class', 'rank-label').attr('text-anchor', 'middle').attr('dy', '.35em');
-      marker.append('title');
-      return marker;
-    }, (update) => update, (exit) => exit.remove()
-  ).attr('transform', (candidate) => `translate(${projection(candidate.geometry.coordinates)})`)
-    .on('click', (event, candidate) => { event.stopPropagation(); selectCandidate(candidate); });
-  markers.select('.rank-label').text((candidate) => candidate.properties.rank);
-  markers.select('title').text((candidate) => `#${candidate.properties.rank} ${candidate.properties.name} · score ${candidate.properties.score}`);
-}
-
-function renderRuns() {
-  const runs = state.layers.runs ? filteredRuns() : [];
-  const points = runLayer.selectAll('g.run').data(runs, (run) => run.id).join(
-    (enter) => {
-      const group = enter.append('g').attr('class', 'run');
-      group.append('circle').attr('class', 'run-halo').attr('r', 9);
-      group.append('circle').attr('class', 'run-point').attr('r', 4.5);
-      return group;
-    },
-    (update) => update,
-    (exit) => exit.remove()
-  );
-  points.attr('transform', (run) => `translate(${projection([run.properties.longitude, run.properties.latitude])})`)
-    .on('click', (event, run) => { event.stopPropagation(); selectRun(run, false); });
-  points.select('.run-point').classed('selected', (run) => state.selectedType === 'run' && run.id === state.selected);
+    .text((cell) => `${cell.properties.complaintCount} dog-related complaint${cell.properties.complaintCount === 1 ? '' : 's'} · ${cell.properties.neighborhood || 'NYC'}`);
 }
 
 function renderSidebar() {
-  document.querySelector('#run-controls').hidden = !state.layers.runs;
+  document.querySelector('#candidate-controls').hidden = !state.layers.candidate;
+  document.querySelector('#existing-park-options').hidden = !state.layers.candidate;
+  document.querySelector('#existing-list-section').hidden = !state.layers.candidate;
+  document.querySelector('#top-candidate-section').hidden = !state.layers.candidate;
+  densityList.hidden = state.layers.candidate || !state.layers.density || !state.density;
   renderFilters();
 
-  if (state.layers.runs) return renderRunList();
+  if (state.layers.candidate) return renderCandidateList();
   if (state.layers.density && state.density) return renderDensityList();
-  if (state.layers.parks && state.parks) return renderParkList();
 
   document.querySelector('#visible-count').textContent = '0';
   document.querySelector('#visible-label').textContent = 'visible layers';
   document.querySelector('#borough-count').textContent = '—';
-  document.querySelector('#borough-label').textContent = 'select a layer';
+  document.querySelector('#borough-label').textContent = 'select a data layer';
   document.querySelector('.results-heading h2').textContent = 'No layers selected';
-  d3.select(list).selectAll('*').remove();
+  d3.select(densityList).selectAll('*').remove();
 }
 
-function baseList(items, key, selectedType, onClick) {
-  const rows = d3.select(list).selectAll('button.run-item').data(items, key).join(
+function baseList(container, items, key, selectedType, onClick) {
+  const rows = d3.select(container).selectAll('button.run-item').data(items, key).join(
     (enter) => enter.append('button').attr('type', 'button').attr('class', 'run-item').html('<span class="dot"></span><span><strong></strong><small></small></span>'),
     (update) => update,
     (exit) => exit.remove()
   );
   rows.classed('active', (item) => state.selectedType === selectedType && key(item) === state.selected).on('click', onClick);
-  d3.select(list).selectAll('p.empty').remove();
+  d3.select(container).selectAll('p.empty').remove();
   return rows;
-}
-
-function renderRunList() {
-  const runs = filteredRuns();
-  document.querySelector('#visible-count').textContent = runs.length;
-  document.querySelector('#visible-label').textContent = 'dog runs shown';
-  document.querySelector('#borough-count').textContent = new Set(runs.map((run) => run.properties.borough)).size;
-  document.querySelector('#borough-label').textContent = 'boroughs';
-  document.querySelector('.results-heading h2').textContent = 'Dog runs';
-  const rows = baseList(runs, (run) => run.id, 'run', (_event, run) => selectRun(run, true));
-  rows.select('.dot').style('background', null);
-  rows.select('strong').text((run) => run.properties.name);
-  rows.select('small').text((run) => `${boroughNames[run.properties.borough]} · ${run.properties.zipcode || 'ZIP unavailable'}`);
-  d3.select(list).selectAll('p.empty').data(runs.length ? [] : [null]).join('p').attr('class', 'empty').text('No dog runs match your search.');
 }
 
 function renderDensityList() {
@@ -228,55 +258,54 @@ function renderDensityList() {
   document.querySelector('#borough-count').textContent = areas.filter((area) => area.licenses > 0).length;
   document.querySelector('#borough-label').textContent = 'NTAs with licenses';
   document.querySelector('.results-heading h2').textContent = 'Highest density areas';
-  const rows = baseList(areas, (area) => area.nta, 'density', (_event, area) => selectArea(area));
+  const rows = baseList(densityList, areas, (area) => area.nta, 'density', (_event, area) => selectArea(area));
   rows.select('.dot').style('background', (area) => context.color(area.density));
   rows.select('strong').text((area) => area.name);
   rows.select('small').text((area) => `${d3.format(',.0f')(area.density)} licenses / km² · ${d3.format(',')(area.licenses)}`);
 }
 
-function renderParkList() {
-  const parks = [...state.parks.features].sort((a, b) => d3.ascending(a.properties.name, b.properties.name));
-  document.querySelector('#visible-count').textContent = d3.format(',')(parks.length);
-  document.querySelector('#visible-label').textContent = 'parks without dog runs';
-  document.querySelector('#borough-count').textContent = new Set(parks.map((park) => park.properties.borough)).size;
-  document.querySelector('#borough-label').textContent = 'boroughs';
-  document.querySelector('.results-heading h2').textContent = 'Candidate parks';
-  const rows = baseList(parks, (park) => park.id, 'park', (_event, park) => selectPark(park));
-  rows.select('.dot').style('background', '#e45f4f');
-  rows.select('strong').text((park) => park.properties.name);
-  rows.select('small').text((park) => `${park.properties.borough || 'NYC'} · ${park.properties.type || 'Park property'}`);
-}
-
 function renderCandidateList() {
-  const section = document.querySelector('.candidate-list-section');
-  section.hidden = !state.layers.ranking;
-  if (!state.layers.ranking || !state.opportunities) return;
-  const candidates = state.opportunities.features.slice(0, 8);
-  const rows = d3.select('#candidate-list').selectAll('button.candidate-item').data(candidates, (candidate) => candidate.id).join(
+  if (!state.opportunities) return;
+  const parks = filteredCandidates();
+  const candidates = parks.slice(0, topCount() || 0);
+  const existingParks = filteredExistingParks();
+  d3.select(existingList).selectAll('button.candidate-item, p.empty').remove();
+  document.querySelector('#visible-count').textContent = d3.format(',')(parks.length);
+  document.querySelector('#visible-label').textContent = `ranked parks ${state.includeExisting ? '(including existing runs)' : '(excluding existing runs)'}`;
+  document.querySelector('#borough-count').textContent = new Set(parks.map((candidate) => candidate.properties.borough)).size;
+  document.querySelector('#borough-label').textContent = 'boroughs';
+  const existingRows = d3.select(existingList).selectAll('button.candidate-item').data(existingParks, (candidate) => candidate.id).join(
+    (enter) => enter.append('button').attr('type', 'button').attr('class', 'candidate-item existing-park-item').html('<span class="rank existing-rank">●</span><span><strong></strong><small></small></span><b>RUN</b>'),
+    (update) => update,
+    (exit) => exit.remove()
+  ).classed('active', (candidate) => state.selectedType === 'candidate' && candidate.id === state.selected)
+    .on('click', (_event, candidate) => selectCandidate(candidate));
+  existingRows.select('strong').text((candidate) => candidate.properties.name);
+  existingRows.select('small').text((candidate) => `${candidate.properties.borough || 'NYC'} · ${candidate.properties.acres.toFixed(1)} acres`);
+
+  const rows = d3.select(list).selectAll('button.candidate-item').data(candidates, (candidate) => candidate.id).join(
     (enter) => enter.append('button').attr('type', 'button').attr('class', 'candidate-item').html('<span class="rank"></span><span><strong></strong><small></small></span><b></b>'),
     (update) => update, (exit) => exit.remove()
-  ).classed('active', (candidate) => state.selectedType === 'ranking' && candidate.id === state.selected)
+  ).classed('active', (candidate) => state.selectedType === 'candidate' && candidate.id === state.selected)
     .on('click', (_event, candidate) => selectCandidate(candidate));
   rows.select('.rank').text((candidate) => `#${candidate.properties.rank}`);
   rows.select('strong').text((candidate) => candidate.properties.name);
-  rows.select('small').text((candidate) => `${candidate.properties.borough} · ${candidate.properties.acres.toFixed(1)} acres`);
-  rows.select('b').text((candidate) => candidate.properties.score);
+  rows.select('small').text((candidate) => `${candidate.properties.borough || 'NYC'} · ${candidate.properties.acres.toFixed(1)} acres${candidate.properties.hasDogRun ? ' · existing run' : ''}`);
+  rows.select('b').text((candidate) => candidate.properties.score.toFixed(1));
+  d3.select(existingList).selectAll('p.empty').data(existingParks.length ? [] : [null]).join('p').attr('class', 'empty')
+    .text(state.query ? 'No existing dog-run parks match your search.' : 'No existing dog-run parks in this area.');
+  d3.select(list).selectAll('p.empty').data(candidates.length ? [] : [null]).join('p').attr('class', 'empty')
+    .text(topCount() === null ? 'Enter a whole number of 1 or more.' : state.query ? 'No ranked parks match your search.' : 'No ranked parks are available for this selection.');
 }
 
 function renderLegends() {
-  document.querySelector('.legend-runs').hidden = !state.layers.runs;
-  document.querySelector('.legend-parks').hidden = !state.layers.parks;
+  document.querySelector('.legend-candidate').hidden = !state.layers.candidate;
+  document.querySelector('.legend-existing').hidden = !state.layers.candidate;
   document.querySelector('.legend-complaints').hidden = !state.layers.complaints;
-  document.querySelector('.legend-ranking').hidden = !state.layers.ranking;
+  document.querySelector('.legend-ranking').hidden = !state.layers.candidate;
   const mapKey = document.querySelector('.map-key');
-  mapKey.hidden = !state.layers.runs && !state.layers.parks && !state.layers.complaints && !state.layers.ranking;
-  const densityLegend = document.querySelector('#density-legend');
-  const context = state.layers.density ? densityContext() : null;
-  mapKey.classList.toggle('density-visible', Boolean(context));
-  densityLegend.hidden = !context;
-  if (context) {
-    densityLegend.innerHTML = `<div class="legend-title">Estimated licenses per km²</div><div class="legend-gradient"></div><div class="legend-values"><span>0</span><span>${d3.format(',.0f')(context.upper)}+</span></div>`;
-  }
+  mapKey.hidden = !state.layers.candidate && !state.layers.complaints;
+  document.querySelector('.legend-ranking').lastChild.textContent = ` Rank in top ${topCount() || 'N'} candidate parks`;
 }
 
 function setDetailLabels(kicker, one, two, three) {
@@ -286,31 +315,11 @@ function setDetailLabels(kicker, one, two, three) {
   document.querySelector('#detail-label-three').textContent = three;
 }
 
-function selectRun(run, moveMap) {
-  state.selected = run.id;
-  state.selectedType = 'run';
-  const p = run.properties;
-  setDetailLabels('ACTIVE DOG RUN', 'Surface', 'Seating', 'Area');
-  document.querySelector('#detail-name').textContent = p.name;
-  document.querySelector('#detail-location').textContent = `${boroughNames[p.borough]} · ${p.zipcode || 'ZIP unavailable'}`;
-  document.querySelector('#detail-surface').textContent = p.surface || 'Not listed';
-  document.querySelector('#detail-seating').textContent = p.seating || 'Not listed';
-  document.querySelector('#detail-area').textContent = p.areaSqM < 1000 ? `${Math.round(p.areaSqM)} m²` : `${(p.areaSqM / 1000).toFixed(1)}k m²`;
-  const directions = document.querySelector('#directions');
-  document.querySelector('#candidate-factors').hidden = true;
-  directions.className = '';
-  directions.textContent = 'Get directions ↗';
-  directions.href = `https://www.google.com/maps/dir/?api=1&destination=${p.latitude},${p.longitude}`;
-  detail.hidden = false;
-  render();
-  if (moveMap) centerPoint([p.longitude, p.latitude]);
-}
-
 function selectArea(area) {
   if (!area) return;
   state.selected = area.nta;
   state.selectedType = 'density';
-  setDetailLabels('LICENSE DENSITY', 'Licenses', 'Density', 'NTA area');
+  setDetailLabels('DOG-RUN DEMAND', 'Licenses', 'Density', 'NTA area');
   document.querySelector('#detail-name').textContent = area.name;
   document.querySelector('#detail-location').textContent = `${area.borough} · NTA ${area.nta} · ${state.density.year}`;
   document.querySelector('#detail-surface').textContent = d3.format(',')(area.licenses);
@@ -332,12 +341,12 @@ function selectSearchedArea(feature, moveMap) {
   state.selected = feature.id;
   state.selectedType = 'area-search';
   const densityArea = state.density?.areas.find((area) => area.nta === feature.id);
-  setDetailLabels('NYC NEIGHBORHOOD', 'Borough', 'NTA code', 'License density');
+  setDetailLabels('NYC NEIGHBORHOOD', 'Borough', 'NTA code', 'Dog-run demand');
   document.querySelector('#detail-name').textContent = feature.properties.name;
   document.querySelector('#detail-location').textContent = 'Neighborhood Tabulation Area boundary';
   document.querySelector('#detail-surface').textContent = feature.properties.borough;
   document.querySelector('#detail-seating').textContent = feature.id;
-  document.querySelector('#detail-area').textContent = densityArea ? `${d3.format(',.0f')(densityArea.density)} / km²` : 'Loading…';
+  document.querySelector('#detail-area').textContent = densityArea ? `${d3.format(',.0f')(densityArea.density)} licenses / km²` : 'Loading…';
   document.querySelector('#candidate-factors').hidden = true;
   const directions = document.querySelector('#directions');
   directions.className = '';
@@ -372,46 +381,29 @@ function neighborhoodSearchMatch(value) {
   return contains.length === 1 ? contains[0] : null;
 }
 
-function selectPark(park) {
-  const p = park.properties;
-  state.selected = park.id;
-  state.selectedType = 'park';
-  setDetailLabels('PARK WITHOUT A DOG RUN', 'Property ID', 'Recreation', 'Type');
-  document.querySelector('#detail-name').textContent = p.name;
-  document.querySelector('#detail-location').textContent = p.borough || 'New York City';
-  document.querySelector('#detail-surface').textContent = p.propertyId;
-  document.querySelector('#detail-seating').textContent = p.recreationCategory || 'Not classified';
-  document.querySelector('#detail-area').textContent = p.type || 'Park property';
-  const directions = document.querySelector('#directions');
-  document.querySelector('#candidate-factors').hidden = true;
-  directions.className = '';
-  directions.removeAttribute('href');
-  directions.textContent = 'No mapped dog run intersects this property';
-  detail.hidden = false;
-  render();
-}
-
 function selectCandidate(candidate) {
   const p = candidate.properties;
   state.selected = candidate.id;
-  state.selectedType = 'ranking';
-  setDetailLabels('DOG-RUN OPPORTUNITY', 'Score', 'Park acreage', 'Nearest run');
-  document.querySelector('#detail-name').textContent = `#${p.rank} ${p.name}`;
-  document.querySelector('#detail-location').textContent = `${p.borough} · ${d3.format(',')(p.licenseEstimate)} estimated licenses · ${d3.format(',')(p.complaintCount)} requests`;
-  document.querySelector('#detail-surface').textContent = `${p.score} / 100`;
+  state.selectedType = 'candidate';
+  setDetailLabels('CANDIDATE PARK', 'Score', 'Park acreage', 'Nearest run');
+  document.querySelector('#detail-name').textContent = p.rank === null ? p.name : `#${p.rank} ${p.name}`;
+  document.querySelector('#detail-location').textContent = `${p.borough || 'NYC'} · ${p.hasDogRun ? 'Existing dog run' : 'No mapped dog run'} · ${d3.format(',')(p.licenseEstimate)} estimated licenses · ${d3.format(',')(p.complaintCount)} complaints`;
+  document.querySelector('#detail-surface').textContent = p.score === null ? 'Excluded from ranking' : `${p.score} / 100`;
   document.querySelector('#detail-seating').textContent = `${p.acres.toFixed(1)} acres`;
   document.querySelector('#detail-area').textContent = `${p.nearestRunKm.toFixed(2)} km`;
   const factors = document.querySelector('#candidate-factors');
-  factors.hidden = false;
-  factors.innerHTML = [
-    ['License demand', p.factors.demand],
+  factors.hidden = !p.factors;
+  factors.innerHTML = p.factors ? [
+    ['Dog-run demand', p.factors.demand],
     ['Access gap', p.factors.access],
-    ['311 requests', p.factors.complaints],
+    ['Dog-related complaints', p.factors.complaints],
     ['Park acreage', p.factors.acreage]
-  ].map(([label, value]) => `<div class="factor-chip"><span>${label}</span><strong>${value.toFixed(0)}</strong></div>`).join('');
+  ].map(([label, value]) => `<div class="factor-chip"><span>${label}</span><strong>${value.toFixed(0)}</strong></div>`).join('') : '';
   const directions = document.querySelector('#directions');
   directions.className = 'candidate-note';
-  directions.textContent = 'Exploratory comparison only — not a construction recommendation or site approval.';
+  directions.textContent = p.score === null
+    ? 'This park is excluded from scoring under the current selection.'
+    : 'Exploratory comparison only — not a construction recommendation or site approval.';
   directions.removeAttribute('href');
   detail.hidden = false;
   render();
@@ -441,6 +433,42 @@ function drawMap() {
   render();
 }
 
+function currentWeights() {
+  return Object.fromEntries([...document.querySelectorAll('[data-weight]')].map((input) => [input.dataset.weight, Number(input.value)]));
+}
+
+async function refreshOpportunities() {
+  const requestId = ++opportunityRequestId;
+  const status = document.querySelector('#ranking-status');
+  const weights = currentWeights();
+  const total = Object.values(weights).reduce((sum, value) => sum + value, 0);
+  if (total !== 100) {
+    status.textContent = `Weights total ${total}%; they must total 100%.`;
+    return;
+  }
+  status.textContent = 'Recalculating scores and rankings…';
+  const params = new URLSearchParams({ ...weights, includeExisting: String(state.includeExisting) });
+  try {
+    const response = await fetch(`/api/opportunities?${params}`);
+    if (!response.ok) throw new Error(`Ranking request returned ${response.status}`);
+    const opportunities = await response.json();
+    if (requestId !== opportunityRequestId) return;
+    state.opportunities = opportunities;
+    status.textContent = `${eligibleCandidates().length.toLocaleString()} parks scored and ranked.`;
+    const selectedCandidate = state.selectedType === 'candidate'
+      ? state.opportunities.features.find((candidate) => candidate.id === state.selected)
+      : null;
+    if (selectedCandidate) {
+      selectCandidate(selectedCandidate);
+      return;
+    }
+    render();
+  } catch (error) {
+    if (requestId === opportunityRequestId) status.textContent = 'Unable to calculate park scores.';
+    console.error(error);
+  }
+}
+
 async function loadOptionalLayers() {
   const load = async (url, assign) => {
     try {
@@ -452,7 +480,6 @@ async function loadOptionalLayers() {
   };
   document.querySelector('#ranking-status').textContent = 'Calculating candidate scores…';
   await Promise.allSettled([
-    load('/api/parks', (data) => { state.parks = data; }),
     load('/api/license-density', (data) => {
       state.density = data;
       if (state.selectedType === 'area-search') {
@@ -461,19 +488,15 @@ async function loadOptionalLayers() {
       }
     }),
     load('/api/complaint-hotspots', (data) => { state.complaints = data; }),
-    load('/api/opportunities', (data) => {
-      state.opportunities = data;
-      document.querySelector('#ranking-status').textContent = `${data.features.length.toLocaleString()} candidate parks scored.`;
-    })
+    refreshOpportunities()
   ]);
 }
 
 async function init() {
   try {
-    const [runsResponse, neighborhoodsResponse] = await Promise.all([fetch('/api/dog-runs'), fetch('/api/neighborhoods')]);
-    if (!runsResponse.ok || !neighborhoodsResponse.ok) throw new Error('Map data request failed');
-    const [runs, neighborhoods] = await Promise.all([runsResponse.json(), neighborhoodsResponse.json()]);
-    state.runs = runs.features;
+    const neighborhoodsResponse = await fetch('/api/neighborhoods');
+    if (!neighborhoodsResponse.ok) throw new Error('Neighborhood map data request failed');
+    const neighborhoods = await neighborhoodsResponse.json();
     state.neighborhoods = neighborhoods;
     d3.select('#area-options').selectAll('option').data(neighborhoods.features).join('option')
       .attr('value', (feature) => feature.properties.name)
@@ -507,7 +530,7 @@ document.querySelector('#zoom-in').addEventListener('click', () => svg.transitio
 document.querySelector('#zoom-out').addEventListener('click', () => svg.transition().call(zoom.scaleBy, 0.67));
 document.querySelectorAll('.layer-option input').forEach((checkbox) => checkbox.addEventListener('change', () => {
   state.layers[checkbox.dataset.layer] = checkbox.checked;
-  const selectionType = { runs: 'run', density: 'density', parks: 'park' }[checkbox.dataset.layer];
+  const selectionType = { candidate: 'candidate', density: 'density' }[checkbox.dataset.layer];
   if (!checkbox.checked && state.selectedType === selectionType) {
     state.selected = null;
     state.selectedType = null;
@@ -515,21 +538,21 @@ document.querySelectorAll('.layer-option input').forEach((checkbox) => checkbox.
   }
   render();
 }));
+document.querySelectorAll('input[name="existing-parks"]').forEach((radio) => radio.addEventListener('change', () => {
+  state.includeExisting = radio.value === 'include';
+  refreshOpportunities();
+}));
 document.querySelector('#apply-weights').addEventListener('click', async () => {
-  const values = Object.fromEntries([...document.querySelectorAll('[data-weight]')].map((input) => [input.dataset.weight, Number(input.value)]));
-  const total = Object.values(values).reduce((sum, value) => sum + value, 0);
-  const status = document.querySelector('#ranking-status');
-  if (total !== 100) { status.textContent = `Weights total ${total}%; they must total 100%.`; return; }
-  status.textContent = 'Recalculating rankings…';
-  const params = new URLSearchParams(values);
-  try {
-    const response = await fetch(`/api/opportunities?${params}`);
-    if (!response.ok) throw new Error('Ranking request failed');
-    state.opportunities = await response.json();
-    status.textContent = `${state.opportunities.features.length.toLocaleString()} candidate parks scored.`;
-    render();
-  } catch (error) { status.textContent = 'Unable to calculate rankings.'; console.error(error); }
+  refreshOpportunities();
 });
+document.querySelector('#reset-weights').addEventListener('click', () => {
+  const defaults = { demand: 35, access: 25, complaints: 20, suitability: 20 };
+  document.querySelectorAll('[data-weight]').forEach((input) => {
+    input.value = defaults[input.dataset.weight];
+  });
+  refreshOpportunities();
+});
+document.querySelector('#top-park-count').addEventListener('input', () => render());
 svg.on('click', () => { state.selected = null; state.selectedType = null; state.searchArea = null; detail.hidden = true; render(); });
 window.addEventListener('resize', () => { if (state.neighborhoods) drawMap(); });
 

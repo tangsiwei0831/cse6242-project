@@ -71,24 +71,31 @@ and `nta_2020` tables. After starting the stack, open:
 
 <http://localhost:3000>
 
-The map provides independent checkbox layers for active NYC dog runs, estimated
-dog-license density by NTA, and existing NYC Parks/open-space properties that do
-not spatially intersect a dog run. Dog runs are green circles and candidate park
-properties are coral squares placed at a representative point inside each park.
-This keeps the park inventory readable above the license-density choropleth. It supports borough and name/ZIP filtering,
-zooming and panning, and displays surface, seating, area, and directions for a
-selected run. The park markers represent mapped properties, not real-time
-open/closed operating status. Its License Density layer maps the latest dog-license extract by
-NTA. Since licenses contain ZIP codes rather than coordinates, ZIP totals are
-apportioned among overlapping NTAs using the distribution of PLUTO address
-points, then divided by NTA area. Set `WEB_PORT` in `.env` to expose it on a
-different host port.
+The map has three independent layers: **Candidate parks**, **Dog-run demand**,
+and **Dog-related complaints**. Candidate parks are shown as green outlined
+squares; squares are filled when an active dog run is mapped to that park, and
+rank numbers appear inside markers included in the configurable top-candidate
+list (10 parks by default). Hover over a square for its score context and
+strongest scoring factor, or select it for the full factor breakdown. The left
+panel separates parks with existing dog runs from the top-ranked candidate
+parks; use the top-count field to change how many candidates are listed.
 
-The optional dog-related 311 layer groups mapped requests into roughly 100-meter
-cells. Candidate parks are ranked using adjustable weights for latest-year
-license demand, distance to the nearest active dog run, neighborhood 311 volume,
-and reported park acreage. These scores are exploratory comparisons rather than
-construction recommendations or site approvals.
+Use the **Existing dog-run parks** radio options to include or exclude parks
+that already have a mapped active dog run from scoring and the top-candidate
+list; the separate existing-dog-run section continues to show those parks. The
+map continues to show every park in either setting. Scores use
+adjustable weights for latest-year license demand, distance to the nearest
+active dog run, neighborhood dog-related 311 volume, and reported park
+acreage. Restore the default weights with **Reset to default**. These scores are
+exploratory comparisons rather than construction recommendations or site
+approvals.
+
+The Dog-run demand layer maps the latest dog-license extract by NTA. Since
+licenses contain ZIP codes rather than coordinates, ZIP totals are apportioned
+among overlapping NTAs using the distribution of PLUTO address points, then
+divided by NTA area. The Dog-related complaints layer groups mapped requests
+into roughly 100-meter cells. Set `WEB_PORT` in `.env` to expose the map on a
+different host port.
 
 The Compose web service runs in development mode. Files under `web/` are mounted
 into the container, server changes restart Node automatically, and changes to
