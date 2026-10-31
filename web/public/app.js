@@ -2,7 +2,7 @@ const boroughNames = { B: 'Brooklyn', M: 'Manhattan', Q: 'Queens', R: 'Staten Is
 const state = {
   runs: [], parks: null, neighborhoods: null, density: null, complaints: null, opportunities: null,
   layers: { runs: true, density: true, parks: true, complaints: false, ranking: true },
-  borough: 'ALL', query: '', selected: null, selectedType: null
+  borough: 'ALL', query: '', selected: null, selectedType: null, searchArea: null
 };
 
 const svg = d3.select('#map');
@@ -65,24 +65,48 @@ function render() {
 }
 
 function renderNeighborhoods() {
-  const density = state.layers.density ? densityContext() : null;
+  const metrics = densityContext();
+  const density = state.layers.density ? metrics : null;
   neighborhoodLayer.selectAll('path')
-    .attr('class', (feature) => `neighborhood${density ? ' density-area' : ''}${state.selectedType === 'density' && feature.id === state.selected ? ' selected' : ''}`)
+    .attr('class', (feature) => `neighborhood${metrics ? ' density-area' : ''}${state.selectedType === 'density' && feature.id === state.selected ? ' selected' : ''}${state.searchArea === feature.id ? ' search-match' : ''}`)
     .style('fill', (feature) => density ? density.color(density.byId.get(feature.id)?.density || 0) : null)
-    .on('click', density ? (event, feature) => {
+    .on('click', metrics ? (event, feature) => {
       event.stopPropagation();
-      selectArea(density.byId.get(feature.id));
+      selectArea(metrics.byId.get(feature.id));
     } : null)
-    .on('mousemove', density ? (event, feature) => {
-      const area = density.byId.get(feature.id);
+    .on('mousemove', metrics ? (event, feature) => {
+      const area = metrics.byId.get(feature.id);
       if (!area) return;
       tooltip.hidden = false;
       tooltip.style.left = `${event.offsetX + 14}px`;
       tooltip.style.top = `${event.offsetY + 14}px`;
       tooltip.replaceChildren();
+      const header = document.createElement('div');
+      header.className = 'area-tooltip-header';
       const name = document.createElement('strong');
       name.textContent = area.name;
-      tooltip.append(name, document.createElement('br'), `${d3.format(',.0f')(area.density)} licenses / km²`);
+      const meta = document.createElement('small');
+      meta.textContent = `${area.borough} · ${area.nta}`;
+      header.append(name, meta);
+      const grid = document.createElement('div');
+      grid.className = 'area-metric-grid';
+      [
+        ['Est. licenses', d3.format(',')(area.licenses)],
+        ['Licenses / km²', d3.format(',.0f')(area.density)],
+        ['Active dog runs', d3.format(',')(area.dogRuns)],
+        ['Parks without runs', d3.format(',')(area.parksWithoutRuns)],
+        ['311 requests', d3.format(',')(area.complaints311)],
+        ['Park acreage', d3.format(',.1f')(area.parkAcres)]
+      ].forEach(([label, value]) => {
+        const item = document.createElement('div');
+        const labelNode = document.createElement('span');
+        const valueNode = document.createElement('b');
+        labelNode.textContent = label;
+        valueNode.textContent = value;
+        item.append(labelNode, valueNode);
+        grid.append(item);
+      });
+      tooltip.append(header, grid);
     } : null)
     .on('mouseleave', () => { tooltip.hidden = true; });
 }
@@ -301,6 +325,53 @@ function selectArea(area) {
   render();
 }
 
+function selectSearchedArea(feature, moveMap) {
+  if (!feature) return;
+  const wasSelected = state.searchArea === feature.id;
+  state.searchArea = feature.id;
+  state.selected = feature.id;
+  state.selectedType = 'area-search';
+  const densityArea = state.density?.areas.find((area) => area.nta === feature.id);
+  setDetailLabels('NYC NEIGHBORHOOD', 'Borough', 'NTA code', 'License density');
+  document.querySelector('#detail-name').textContent = feature.properties.name;
+  document.querySelector('#detail-location').textContent = 'Neighborhood Tabulation Area boundary';
+  document.querySelector('#detail-surface').textContent = feature.properties.borough;
+  document.querySelector('#detail-seating').textContent = feature.id;
+  document.querySelector('#detail-area').textContent = densityArea ? `${d3.format(',.0f')(densityArea.density)} / km²` : 'Loading…';
+  document.querySelector('#candidate-factors').hidden = true;
+  const directions = document.querySelector('#directions');
+  directions.className = '';
+  directions.removeAttribute('href');
+  directions.textContent = 'Highlighted NTA boundary';
+  detail.hidden = false;
+  render();
+  if (moveMap && !wasSelected) zoomToFeature(feature);
+}
+
+function zoomToFeature(feature) {
+  const [[x0, y0], [x1, y1]] = path.bounds(feature);
+  const width = svg.node().clientWidth;
+  const height = svg.node().clientHeight;
+  const scale = Math.min(2, 0.48 / Math.max((x1 - x0) / width, (y1 - y0) / height));
+  const transform = d3.zoomIdentity
+    .translate(width / 2, height / 2)
+    .scale(scale)
+    .translate(-(x0 + x1) / 2, -(y0 + y1) / 2);
+  svg.transition().duration(650).call(zoom.transform, transform);
+}
+
+function neighborhoodSearchMatch(value) {
+  const term = value.trim().toLowerCase();
+  if (!term || !state.neighborhoods) return null;
+  const features = state.neighborhoods.features;
+  const exact = features.find((feature) => feature.properties.name.toLowerCase() === term || feature.id.toLowerCase() === term);
+  if (exact) return exact;
+  const starts = features.filter((feature) => feature.properties.name.toLowerCase().startsWith(term));
+  if (starts.length === 1) return starts[0];
+  const contains = features.filter((feature) => feature.properties.name.toLowerCase().includes(term));
+  return contains.length === 1 ? contains[0] : null;
+}
+
 function selectPark(park) {
   const p = park.properties;
   state.selected = park.id;
@@ -382,7 +453,13 @@ async function loadOptionalLayers() {
   document.querySelector('#ranking-status').textContent = 'Calculating candidate scores…';
   await Promise.allSettled([
     load('/api/parks', (data) => { state.parks = data; }),
-    load('/api/license-density', (data) => { state.density = data; }),
+    load('/api/license-density', (data) => {
+      state.density = data;
+      if (state.selectedType === 'area-search') {
+        const feature = state.neighborhoods.features.find((area) => area.id === state.searchArea);
+        if (feature) selectSearchedArea(feature, false);
+      }
+    }),
     load('/api/complaint-hotspots', (data) => { state.complaints = data; }),
     load('/api/opportunities', (data) => {
       state.opportunities = data;
@@ -398,6 +475,9 @@ async function init() {
     const [runs, neighborhoods] = await Promise.all([runsResponse.json(), neighborhoodsResponse.json()]);
     state.runs = runs.features;
     state.neighborhoods = neighborhoods;
+    d3.select('#area-options').selectAll('option').data(neighborhoods.features).join('option')
+      .attr('value', (feature) => feature.properties.name)
+      .attr('label', (feature) => feature.properties.borough);
     drawMap();
     loading.hidden = true;
     loadOptionalLayers();
@@ -407,7 +487,20 @@ async function init() {
   }
 }
 
-document.querySelector('#search').addEventListener('input', (event) => { state.query = event.target.value; render(); });
+document.querySelector('#search').addEventListener('input', (event) => {
+  state.query = event.target.value;
+  const match = neighborhoodSearchMatch(state.query);
+  if (match) selectSearchedArea(match, true);
+  else {
+    state.searchArea = null;
+    if (state.selectedType === 'area-search') {
+      state.selected = null;
+      state.selectedType = null;
+      detail.hidden = true;
+    }
+    render();
+  }
+});
 document.querySelector('#close-detail').addEventListener('click', () => { state.selected = null; state.selectedType = null; detail.hidden = true; render(); });
 document.querySelector('#reset-view').addEventListener('click', resetView);
 document.querySelector('#zoom-in').addEventListener('click', () => svg.transition().call(zoom.scaleBy, 1.5));
@@ -437,7 +530,7 @@ document.querySelector('#apply-weights').addEventListener('click', async () => {
     render();
   } catch (error) { status.textContent = 'Unable to calculate rankings.'; console.error(error); }
 });
-svg.on('click', () => { state.selected = null; state.selectedType = null; detail.hidden = true; render(); });
+svg.on('click', () => { state.selected = null; state.selectedType = null; state.searchArea = null; detail.hidden = true; render(); });
 window.addEventListener('resize', () => { if (state.neighborhoods) drawMap(); });
 
 init();
