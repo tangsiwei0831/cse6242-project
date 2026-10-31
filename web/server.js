@@ -299,16 +299,23 @@ app.get('/api/complaint-hotspots', async (_request, response, next) => {
 app.get('/api/opportunities', async (request, response, next) => {
   const weights = ['demand', 'access', 'complaints', 'suitability'].map((key, index) =>
     request.query[key] === undefined ? [35, 25, 20, 20][index] : Number(request.query[key]));
+  const includeExisting = request.query.includeExisting === 'true';
+  if (request.query.includeExisting !== undefined
+    && request.query.includeExisting !== 'true'
+    && request.query.includeExisting !== 'false') {
+    response.status(400).json({ error: 'includeExisting must be true or false.' });
+    return;
+  }
   if (weights.some((weight) => !Number.isFinite(weight) || weight < 0 || weight > 100)
     || weights.reduce((sum, weight) => sum + weight, 0) !== 100) {
     response.status(400).json({ error: 'Scoring weights must be between 0 and 100 and total 100.' });
     return;
   }
   try {
-    const cacheKey = weights.join('-');
+    const cacheKey = `${weights.join('-')}-${includeExisting}`;
     let resultPromise = opportunityCache.get(cacheKey);
     if (!resultPromise) {
-      resultPromise = pool.query(opportunityQuery, weights).catch((error) => {
+      resultPromise = pool.query(opportunityQuery, [...weights, includeExisting]).catch((error) => {
         opportunityCache.delete(cacheKey);
         throw error;
       });
@@ -322,11 +329,13 @@ app.get('/api/opportunities', async (request, response, next) => {
         geometry: row.geometry,
         properties: {
           propertyId: row.property_id, name: row.name, borough: row.borough,
-          acres: Number(row.acres), score: Number(row.score), rank: Number(row.rank),
+          acres: Number(row.acres), hasDogRun: row.has_dog_run,
+          score: row.score === null ? null : Number(row.score),
+          rank: row.rank === null ? null : Number(row.rank),
           licenseEstimate: Math.round(Number(row.license_estimate)),
           complaintCount: Number(row.complaint_count),
           nearestRunKm: Number(row.nearest_run_km),
-          factors: {
+          factors: row.score === null ? null : {
             demand: Number(row.demand_score), access: Number(row.access_score),
             complaints: Number(row.complaint_score), acreage: Number(row.acreage_score)
           }
@@ -340,9 +349,11 @@ const opportunityQuery = `
   WITH parks AS (
     SELECT gis_property_number AS property_id,
            coalesce(mode() WITHIN GROUP (ORDER BY sign_name) FILTER (WHERE sign_name IS NOT NULL), 'Unnamed park') AS name,
-           max(borough) AS borough, max(open_space_acres) AS acres,
+           max(borough) AS borough, coalesce(max(open_space_acres), 0) AS acres,
            ST_Multi(ST_UnaryUnion(ST_Collect(geometry))) AS geometry
-    FROM parks_recreation GROUP BY gis_property_number
+    FROM parks_recreation
+    WHERE gis_property_number IS NOT NULL
+    GROUP BY gis_property_number
   ), latest AS (
     SELECT max(extract_year) AS extract_year FROM dog_licenses WHERE extract_year IS NOT NULL
   ), license_zip AS (
@@ -367,8 +378,14 @@ const opportunityQuery = `
     SELECT n.nta2020, count(*)::numeric AS complaint_count
     FROM service_requests_311 s JOIN nta_2020 n ON ST_Covers(n.geometry, s.location)
     WHERE s.location IS NOT NULL GROUP BY n.nta2020
-  ), candidates AS (
-    SELECT p.property_id, p.name, p.borough, p.acres, ST_PointOnSurface(p.geometry) AS point,
+  ), park_context AS (
+    SELECT p.property_id, p.name, p.borough, p.acres,
+           ST_PointOnSurface(p.geometry) AS point,
+           EXISTS (
+             SELECT 1 FROM dog_runs d
+             WHERE d.feature_status = 'Active'
+               AND (d.gis_property_number = p.property_id OR ST_Intersects(d.geometry, p.geometry))
+           ) AS has_dog_run,
            coalesce(l.license_estimate, 0) AS license_estimate,
            coalesce(c.complaint_count, 0) AS complaint_count,
            coalesce((SELECT min(ST_Distance(ST_PointOnSurface(d.geometry)::geography, ST_PointOnSurface(p.geometry)::geography))
@@ -377,10 +394,9 @@ const opportunityQuery = `
     LEFT JOIN nta_2020 n ON ST_Covers(n.geometry, ST_PointOnSurface(p.geometry))
     LEFT JOIN licenses l ON l.nta2020 = n.nta2020
     LEFT JOIN complaints c ON c.nta2020 = n.nta2020
-    WHERE p.acres > 0 AND NOT EXISTS (
-      SELECT 1 FROM dog_runs d WHERE d.feature_status = 'Active'
-        AND (d.gis_property_number = p.property_id OR ST_Intersects(d.geometry, p.geometry))
-    )
+  ), candidates AS (
+    SELECT * FROM park_context
+    WHERE $5::boolean OR NOT has_dog_run
   ), normalized AS (
     SELECT *, percent_rank() OVER (ORDER BY license_estimate) * 100 AS demand_score,
            least(nearest_run_meters / 5000.0, 1) * 100 AS access_score,
@@ -390,13 +406,18 @@ const opportunityQuery = `
   ), scored AS (
     SELECT *, round((($1*demand_score + $2*access_score + $3*complaint_score + $4*acreage_score)/100)::numeric, 1) AS score
     FROM normalized
+  ), ranked AS (
+    SELECT *, rank() OVER (ORDER BY score DESC, name) AS rank
+    FROM scored
   )
-  SELECT property_id, name, borough, acres, license_estimate, complaint_count,
-         round((nearest_run_meters/1000.0)::numeric, 2) AS nearest_run_km,
-         demand_score, access_score, complaint_score, acreage_score, score,
-         rank() OVER (ORDER BY score DESC, name) AS rank,
-         ST_AsGeoJSON(point)::json AS geometry
-  FROM scored ORDER BY score DESC, name`;
+  SELECT p.property_id, p.name, p.borough, p.acres, p.has_dog_run,
+         p.license_estimate, p.complaint_count,
+         round((p.nearest_run_meters/1000.0)::numeric, 2) AS nearest_run_km,
+         r.demand_score, r.access_score, r.complaint_score, r.acreage_score,
+         r.score, r.rank, ST_AsGeoJSON(p.point)::json AS geometry
+  FROM park_context p
+  LEFT JOIN ranked r ON r.property_id = p.property_id
+  ORDER BY r.rank NULLS LAST, p.name`;
 
 app.use((error, _request, response, _next) => {
   console.error(error);
