@@ -71,9 +71,24 @@ and `nta_2020` tables. After starting the stack, open:
 
 <http://localhost:3000>
 
-The map shows active NYC dog runs, supports borough and name/ZIP filtering,
+The map provides independent checkbox layers for active NYC dog runs, estimated
+dog-license density by NTA, and existing NYC Parks/open-space properties that do
+not spatially intersect a dog run. Dog runs are green circles and candidate park
+properties are coral squares placed at a representative point inside each park.
+This keeps the park inventory readable above the license-density choropleth. It supports borough and name/ZIP filtering,
 zooming and panning, and displays surface, seating, area, and directions for a
-selected run. Set `WEB_PORT` in `.env` to expose it on a different host port.
+selected run. The park markers represent mapped properties, not real-time
+open/closed operating status. Its License Density layer maps the latest dog-license extract by
+NTA. Since licenses contain ZIP codes rather than coordinates, ZIP totals are
+apportioned among overlapping NTAs using the distribution of PLUTO address
+points, then divided by NTA area. Set `WEB_PORT` in `.env` to expose it on a
+different host port.
+
+The optional dog-related 311 layer groups mapped requests into roughly 100-meter
+cells. Candidate parks are ranked using adjustable weights for latest-year
+license demand, distance to the nearest active dog run, neighborhood 311 volume,
+and reported park acreage. These scores are exploratory comparisons rather than
+construction recommendations or site approvals.
 
 The Compose web service runs in development mode. Files under `web/` are mounted
 into the container, server changes restart Node automatically, and changes to
