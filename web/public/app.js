@@ -308,29 +308,50 @@ function renderLegends() {
   document.querySelector('.legend-ranking').lastChild.textContent = ` Rank in top ${topCount() || 'N'} candidate parks`;
 }
 
-function setDetailLabels(kicker, one, two, three) {
+// Fills the detail card. `stats` and `factors` are [label, value] pairs.
+function showDetail({ kicker, name, location, stats, factors = null, note }) {
   document.querySelector('#detail-kicker').textContent = kicker;
-  document.querySelector('#detail-label-one').textContent = one;
-  document.querySelector('#detail-label-two').textContent = two;
-  document.querySelector('#detail-label-three').textContent = three;
+  document.querySelector('#detail-name').textContent = name;
+  document.querySelector('#detail-location').textContent = location;
+  document.querySelector('#detail-note').textContent = note;
+
+  const statItems = d3.select('#detail-stats').selectAll('div').data(stats).join((enter) => {
+    const item = enter.append('div');
+    item.append('dt');
+    item.append('dd');
+    return item;
+  });
+  statItems.select('dt').text(([label]) => label);
+  statItems.select('dd').text(([, value]) => value);
+
+  const factorList = d3.select('#detail-factors').property('hidden', !factors);
+  const chips = factorList.selectAll('div.factor-chip').data(factors || []).join((enter) => {
+    const chip = enter.append('div').attr('class', 'factor-chip');
+    chip.append('span');
+    chip.append('strong');
+    return chip;
+  });
+  chips.select('span').text(([label]) => label);
+  chips.select('strong').text(([, value]) => value.toFixed(0));
+
+  detail.hidden = false;
 }
 
 function selectArea(area) {
   if (!area) return;
   state.selected = area.nta;
   state.selectedType = 'density';
-  setDetailLabels('DOG-RUN DEMAND', 'Licenses', 'Density', 'NTA area');
-  document.querySelector('#detail-name').textContent = area.name;
-  document.querySelector('#detail-location').textContent = `${area.borough} · NTA ${area.nta} · ${state.density.year}`;
-  document.querySelector('#detail-surface').textContent = d3.format(',')(area.licenses);
-  document.querySelector('#detail-seating').textContent = `${d3.format(',.0f')(area.density)} / km²`;
-  document.querySelector('#detail-area').textContent = `${area.areaSqKm.toFixed(1)} km²`;
-  const directions = document.querySelector('#directions');
-  document.querySelector('#candidate-factors').hidden = true;
-  directions.className = '';
-  directions.removeAttribute('href');
-  directions.textContent = 'Estimated from license ZIP codes';
-  detail.hidden = false;
+  showDetail({
+    kicker: 'DOG-RUN DEMAND',
+    name: area.name,
+    location: `${area.borough} · NTA ${area.nta} · ${state.density.year}`,
+    stats: [
+      ['Licenses', d3.format(',')(area.licenses)],
+      ['Density', `${d3.format(',.0f')(area.density)} / km²`],
+      ['NTA area', `${area.areaSqKm.toFixed(1)} km²`]
+    ],
+    note: 'Estimated from license ZIP codes'
+  });
   render();
 }
 
@@ -341,18 +362,17 @@ function selectSearchedArea(feature, moveMap) {
   state.selected = feature.id;
   state.selectedType = 'area-search';
   const densityArea = state.density?.areas.find((area) => area.nta === feature.id);
-  setDetailLabels('NYC NEIGHBORHOOD', 'Borough', 'NTA code', 'Dog-run demand');
-  document.querySelector('#detail-name').textContent = feature.properties.name;
-  document.querySelector('#detail-location').textContent = 'Neighborhood Tabulation Area boundary';
-  document.querySelector('#detail-surface').textContent = feature.properties.borough;
-  document.querySelector('#detail-seating').textContent = feature.id;
-  document.querySelector('#detail-area').textContent = densityArea ? `${d3.format(',.0f')(densityArea.density)} licenses / km²` : 'Loading…';
-  document.querySelector('#candidate-factors').hidden = true;
-  const directions = document.querySelector('#directions');
-  directions.className = '';
-  directions.removeAttribute('href');
-  directions.textContent = 'Highlighted NTA boundary';
-  detail.hidden = false;
+  showDetail({
+    kicker: 'NYC NEIGHBORHOOD',
+    name: feature.properties.name,
+    location: 'Neighborhood Tabulation Area boundary',
+    stats: [
+      ['Borough', feature.properties.borough],
+      ['NTA code', feature.id],
+      ['Dog-run demand', densityArea ? `${d3.format(',.0f')(densityArea.density)} licenses / km²` : 'Loading…']
+    ],
+    note: 'Highlighted NTA boundary'
+  });
   render();
   if (moveMap && !wasSelected) zoomToFeature(feature);
 }
@@ -385,27 +405,25 @@ function selectCandidate(candidate) {
   const p = candidate.properties;
   state.selected = candidate.id;
   state.selectedType = 'candidate';
-  setDetailLabels('CANDIDATE PARK', 'Score', 'Park acreage', 'Nearest run');
-  document.querySelector('#detail-name').textContent = p.rank === null ? p.name : `#${p.rank} ${p.name}`;
-  document.querySelector('#detail-location').textContent = `${p.borough || 'NYC'} · ${p.hasDogRun ? 'Existing dog run' : 'No mapped dog run'} · ${d3.format(',')(p.licenseEstimate)} estimated licenses · ${d3.format(',')(p.complaintCount)} complaints`;
-  document.querySelector('#detail-surface').textContent = p.score === null ? 'Excluded from ranking' : `${p.score} / 100`;
-  document.querySelector('#detail-seating').textContent = `${p.acres.toFixed(1)} acres`;
-  document.querySelector('#detail-area').textContent = `${p.nearestRunKm.toFixed(2)} km`;
-  const factors = document.querySelector('#candidate-factors');
-  factors.hidden = !p.factors;
-  factors.innerHTML = p.factors ? [
-    ['Dog-run demand', p.factors.demand],
-    ['Access gap', p.factors.access],
-    ['Dog-related complaints', p.factors.complaints],
-    ['Park acreage', p.factors.acreage]
-  ].map(([label, value]) => `<div class="factor-chip"><span>${label}</span><strong>${value.toFixed(0)}</strong></div>`).join('') : '';
-  const directions = document.querySelector('#directions');
-  directions.className = 'candidate-note';
-  directions.textContent = p.score === null
-    ? 'This park is excluded from scoring under the current selection.'
-    : 'Exploratory comparison only — not a construction recommendation or site approval.';
-  directions.removeAttribute('href');
-  detail.hidden = false;
+  showDetail({
+    kicker: 'CANDIDATE PARK',
+    name: p.rank === null ? p.name : `#${p.rank} ${p.name}`,
+    location: `${p.borough || 'NYC'} · ${p.hasDogRun ? 'Existing dog run' : 'No mapped dog run'} · ${d3.format(',')(p.licenseEstimate)} estimated licenses · ${d3.format(',')(p.complaintCount)} complaints`,
+    stats: [
+      ['Score', p.score === null ? 'Excluded from ranking' : `${p.score} / 100`],
+      ['Park acreage', `${p.acres.toFixed(1)} acres`],
+      ['Nearest run', `${p.nearestRunKm.toFixed(2)} km`]
+    ],
+    factors: p.factors && [
+      ['Dog-run demand', p.factors.demand],
+      ['Access gap', p.factors.access],
+      ['Dog-related complaints', p.factors.complaints],
+      ['Park acreage', p.factors.acreage]
+    ],
+    note: p.score === null
+      ? 'This park is excluded from scoring under the current selection.'
+      : 'Exploratory comparison only — not a construction recommendation or site approval.'
+  });
   render();
 }
 

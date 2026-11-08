@@ -95,16 +95,9 @@ fieldset { padding: 0; border: 0; }
 .candidate-park:hover .candidate-park-point, .candidate-park.selected .candidate-park-point { stroke: #17352b; stroke-width: 2.5; }
 .candidate-park-rank { fill: #17352b; font-size: 5.5px; font-weight: 700; pointer-events: none; }
 .complaint-point { fill: #7651a8; fill-opacity: .42; stroke: #fff; stroke-width: 1; vector-effect: non-scaling-stroke; }
-.rank-marker { cursor: pointer; }
-.rank-point { fill: #efaa32; stroke: #fff; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
-.rank-label { fill: #17352b; font-size: 7px; font-weight: 700; pointer-events: none; }
-.run-halo { fill: rgba(217, 239, 91, .45); }
-.run-point { fill: var(--green); stroke: #fff; stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: pointer; transition: r .15s; }
-.run-point:hover, .run-point.selected { fill: #b85c38; }
 .loading { position: absolute; inset: 0; z-index: 4; display: grid; place-items: center; background: #e9eee7; color: var(--green); font-weight: 600; }
 .map-key { position: absolute; left: 18px; bottom: 16px; display: grid; gap: 6px; padding: 9px 12px; border-radius: 8px; background: rgba(255,253,248,.92); font-size: 11px; box-shadow: 0 4px 15px rgba(30,50,42,.12); }
 .map-key span { display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: middle; }
-.map-key .key-dot { border-radius: 50%; background: var(--green); }
 .map-key .key-park { border: 1px solid #267357; border-radius: 2px; background: #e8f1df; }
 .map-key .key-existing { border: 1px solid #fffdf8; border-radius: 2px; background: #267357; }
 .map-key .key-complaint { border-radius: 50%; }
@@ -131,12 +124,11 @@ fieldset { padding: 0; border: 0; }
 .detail-card dl div { min-width: 0; }
 .detail-card dt { color: var(--muted); font-size: 10px; text-transform: uppercase; }
 .detail-card dd { margin: 3px 0 0; overflow-wrap: anywhere; font-size: 12px; font-weight: 600; }
-.detail-card a { color: var(--green); font-size: 13px; font-weight: 700; text-decoration: none; }
-.candidate-factors { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: -4px 0 16px; }
+.detail-factors { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: -4px 0 16px; }
 .factor-chip { padding: 8px; border-radius: 8px; background: #f3f6ef; }
 .factor-chip span { display: block; color: var(--muted); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
 .factor-chip strong { display: block; margin-top: 2px; font: 700 16px "Fraunces", serif; }
-.candidate-note { display: block; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; line-height: 1.4; }
+.detail-note { margin: 0; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; line-height: 1.4; }
 footer { padding: 18px 44px 28px; color: var(--muted); font-size: 11px; }
 
 @media (max-width: 800px) {
