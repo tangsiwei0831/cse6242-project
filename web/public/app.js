@@ -86,6 +86,22 @@ function render() {
   renderLegends();
 }
 
+// Builds the two-column label/value grid used in map tooltips. `rows` are [label, value] pairs.
+function metricGrid(rows) {
+  const grid = document.createElement('div');
+  grid.className = 'area-metric-grid';
+  rows.forEach(([label, value]) => {
+    const item = document.createElement('div');
+    const labelNode = document.createElement('span');
+    const valueNode = document.createElement('b');
+    labelNode.textContent = label;
+    valueNode.textContent = value;
+    item.append(labelNode, valueNode);
+    grid.append(item);
+  });
+  return grid;
+}
+
 function renderNeighborhoods() {
   const metrics = densityContext();
   const density = state.layers.density ? metrics : null;
@@ -110,25 +126,14 @@ function renderNeighborhoods() {
       const meta = document.createElement('small');
       meta.textContent = `${area.borough} · ${area.nta}`;
       header.append(name, meta);
-      const grid = document.createElement('div');
-      grid.className = 'area-metric-grid';
-      [
+      tooltip.append(header, metricGrid([
         ['Est. licenses', d3.format(',')(area.licenses)],
         ['Licenses / km²', d3.format(',.0f')(area.density)],
         ['Active dog runs', d3.format(',')(area.dogRuns)],
         ['Parks without runs', d3.format(',')(area.parksWithoutRuns)],
         ['Dog-related complaints', d3.format(',')(area.complaints311)],
         ['Park acreage', d3.format(',.1f')(area.parkAcres)]
-      ].forEach(([label, value]) => {
-        const item = document.createElement('div');
-        const labelNode = document.createElement('span');
-        const valueNode = document.createElement('b');
-        labelNode.textContent = label;
-        valueNode.textContent = value;
-        item.append(labelNode, valueNode);
-        grid.append(item);
-      });
-      tooltip.append(header, grid);
+      ]));
     } : null)
     .on('mouseleave', () => { tooltip.hidden = true; });
 }
@@ -174,25 +179,14 @@ function showCandidateTooltip(event, candidate) {
   meta.textContent = `${p.borough || 'NYC'} · ${p.hasDogRun ? 'Existing dog run' : 'No mapped dog run'}`;
   header.append(name, meta);
 
-  const grid = document.createElement('div');
-  grid.className = 'area-metric-grid';
-  [
+  tooltip.append(header, metricGrid([
     ['Rank', p.rank === null ? 'Not ranked' : `#${p.rank}`],
     ['Score', p.score === null ? 'Excluded' : `${p.score} / 100`],
     ['Park acreage', `${p.acres.toFixed(1)} acres`],
     ['Nearest run', `${p.nearestRunKm.toFixed(2)} km`],
     ['Est. licenses', d3.format(',')(p.licenseEstimate)],
     ['Dog-related complaints', d3.format(',')(p.complaintCount)]
-  ].forEach(([label, value]) => {
-    const item = document.createElement('div');
-    const labelNode = document.createElement('span');
-    const valueNode = document.createElement('b');
-    labelNode.textContent = label;
-    valueNode.textContent = value;
-    item.append(labelNode, valueNode);
-    grid.append(item);
-  });
-  tooltip.append(header, grid);
+  ]));
 
   if (p.factors) {
     const strongest = Object.entries(p.factors).sort((a, b) => d3.descending(a[1], b[1]))[0];
