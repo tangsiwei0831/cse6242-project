@@ -297,7 +297,7 @@ app.get('/api/complaint-hotspots', async (_request, response, next) => {
 });
 
 app.get('/api/opportunities', async (request, response, next) => {
-  const weights = ['demand', 'access', 'complaints', 'suitability'].map((key, index) =>
+  const weights = ['demand', 'access', 'complaints', 'acreage'].map((key, index) =>
     request.query[key] === undefined ? [35, 25, 20, 20][index] : Number(request.query[key]));
   const includeExisting = request.query.includeExisting === 'true';
   if (request.query.includeExisting !== undefined

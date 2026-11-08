@@ -558,7 +558,7 @@ document.querySelector('#apply-weights').addEventListener('click', async () => {
   refreshOpportunities();
 });
 document.querySelector('#reset-weights').addEventListener('click', () => {
-  const defaults = { demand: 35, access: 25, complaints: 20, suitability: 20 };
+  const defaults = { demand: 35, access: 25, complaints: 20, acreage: 20 };
   document.querySelectorAll('[data-weight]').forEach((input) => {
     input.value = defaults[input.dataset.weight];
   });
