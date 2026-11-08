@@ -571,6 +571,7 @@ window.addEventListener('resize', () => { if (state.neighborhoods) drawMap(); })
 init();
 
 (async function enableLiveReload() {
+  if (location.hostname !== 'localhost') return;
   try {
     const initial = await fetch('/api/dev-version', { cache: 'no-store' }).then((response) => response.json());
     if (!initial.enabled) return;
