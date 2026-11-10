@@ -14,11 +14,11 @@
 
   /* Map layers: demand is a blue ramp (set in app.js); these three were
      checked together with the dataviz palette validator */
-  --candidate: #eb6834;
-  --candidate-tint: #fdeee6;
-  --candidate-text: #9a3a12;
+  --candidate: #008300;
+  --candidate-tint: #e8f4e8;
+  --candidate-text: #005c00;
   --existing: #3a3a3c;
-  --complaint: #1baf7a;
+  --complaint: #e34948;
 }
 
 /* Base */
@@ -404,8 +404,8 @@ legend {
 }
 
 .candidate-item:hover {
-  border-color: #f3a582;
-  background: #fff8f4;
+  border-color: #8cc98c;
+  background: #f4faf4;
   transform: translateY(-1px);
 }
 
@@ -421,7 +421,7 @@ legend {
   height: 27px;
   border-radius: 7px;
   color: var(--candidate-text);
-  background: #fbd3bf;
+  background: #cce6cc;
   font-weight: 700;
 }
 
