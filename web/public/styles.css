@@ -866,14 +866,6 @@ legend {
   line-height: 1.4;
 }
 
-/* Footer */
-
-footer {
-  padding: 18px 44px 28px;
-  color: var(--muted);
-  font-size: 11px;
-}
-
 /* Small screens */
 
 @media (max-width: 800px) {
@@ -917,9 +909,5 @@ footer {
     right: 18px;
     bottom: 52px;
     width: calc(100% - 36px);
-  }
-
-  footer {
-    padding-left: 22px;
   }
 }
