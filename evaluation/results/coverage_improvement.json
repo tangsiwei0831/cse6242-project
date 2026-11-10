@@ -1,0 +1,175 @@
+{
+    "top10": [
+        {
+            "name": "Staten Island Industrial Park",
+            "rank": 1,
+            "score": 84.2,
+            "borough": "Staten Island",
+            "latitude": 40.613374925108744,
+            "longitude": -74.17188006527144,
+            "has_dog_run": false,
+            "property_id": "R143",
+            "selection_order": 1
+        },
+        {
+            "name": "Willowbrook Park",
+            "rank": 2,
+            "score": 84.2,
+            "borough": "Staten Island",
+            "latitude": 40.599287149350154,
+            "longitude": -74.15836794494405,
+            "has_dog_run": false,
+            "property_id": "R030",
+            "selection_order": 2
+        },
+        {
+            "name": "Saw Mill Creek Marsh",
+            "rank": 3,
+            "score": 84.1,
+            "borough": "Staten Island",
+            "latitude": 40.60802499583461,
+            "longitude": -74.19599988950918,
+            "has_dog_run": false,
+            "property_id": "R130",
+            "selection_order": 3
+        },
+        {
+            "name": "Pralls Island",
+            "rank": 4,
+            "score": 83.9,
+            "borough": "Staten Island",
+            "latitude": 40.60824721235343,
+            "longitude": -74.20166978823212,
+            "has_dog_run": false,
+            "property_id": "R122",
+            "selection_order": 4
+        },
+        {
+            "name": "Old Place Creek Park",
+            "rank": 5,
+            "score": 83.5,
+            "borough": "Staten Island",
+            "latitude": 40.63343262531491,
+            "longitude": -74.19546493689157,
+            "has_dog_run": false,
+            "property_id": "R159",
+            "selection_order": 5
+        },
+        {
+            "name": "Meredith Woods",
+            "rank": 6,
+            "score": 83.4,
+            "borough": "Staten Island",
+            "latitude": 40.59903366344946,
+            "longitude": -74.18761399301283,
+            "has_dog_run": false,
+            "property_id": "R112",
+            "selection_order": 6
+        },
+        {
+            "name": "Meredith Woods",
+            "rank": 7,
+            "score": 82.9,
+            "borough": "Staten Island",
+            "latitude": 40.59755389861695,
+            "longitude": -74.19549451754405,
+            "has_dog_run": false,
+            "property_id": "R163",
+            "selection_order": 7
+        },
+        {
+            "name": "Father Macris Park",
+            "rank": 8,
+            "score": 82.7,
+            "borough": "Staten Island",
+            "latitude": 40.61681373211563,
+            "longitude": -74.16179868958224,
+            "has_dog_run": false,
+            "property_id": "R075A",
+            "selection_order": 8
+        },
+        {
+            "name": "Greenbelt Native Plant Center",
+            "rank": 9,
+            "score": 82.7,
+            "borough": "Staten Island",
+            "latitude": 40.595793756833075,
+            "longitude": -74.18182321211432,
+            "has_dog_run": false,
+            "property_id": "R017A",
+            "selection_order": 9
+        },
+        {
+            "name": "Siedenburg Park",
+            "rank": 10,
+            "score": 82.7,
+            "borough": "Staten Island",
+            "latitude": 40.55607056086692,
+            "longitude": -74.14441167182719,
+            "has_dog_run": false,
+            "property_id": "R121",
+            "selection_order": 10
+        }
+    ],
+    "scenarios": [
+        {
+            "k": 0,
+            "covered_demand": 25802.66014425262647383996,
+            "improvement_pp": 0.00000000000000000000,
+            "eligible_demand": 63732.11543301746635583193,
+            "uncovered_demand": 37929.45528876483988199197,
+            "coverage_percentage": 40.48611907660785998159
+        },
+        {
+            "k": 5,
+            "covered_demand": 25898.45562096562330392380,
+            "improvement_pp": 0.15030958263683871728,
+            "eligible_demand": 63732.11543301746635583193,
+            "uncovered_demand": 37833.65981205184305190813,
+            "coverage_percentage": 40.63642865924469869887
+        },
+        {
+            "k": 10,
+            "covered_demand": 26131.39256531913718623192,
+            "improvement_pp": 0.51580340434801493644,
+            "eligible_demand": 63732.11543301746635583193,
+            "uncovered_demand": 37600.72286769832916960001,
+            "coverage_percentage": 41.00192248095587491803
+        }
+    ],
+    "active_runs": 95,
+    "candidate_count": 1728,
+    "source_versions": [
+        {
+            "kind": "demand",
+            "revision": 1
+        },
+        {
+            "kind": "accessibility",
+            "revision": 1
+        },
+        {
+            "kind": "candidates",
+            "revision": 1
+        }
+    ],
+    "stored_baseline": {
+        "covered_demand": 25802.660144252626,
+        "eligible_demand": 63732.11543301747,
+        "eligible_parcels": 767337,
+        "nta_total_demand": 63697.425617441324,
+        "uncovered_demand": 37929.45528876484,
+        "conservation_error": 0,
+        "nta_covered_demand": 25802.526867332803,
+        "coverage_percentage": 40.48611907660786,
+        "nta_uncovered_demand": 37894.898750108514,
+        "unassigned_nta_demand": 34.68981557614499,
+        "nta_conservation_error": 0,
+        "unassigned_nta_parcels": 141,
+        "invalid_location_demand": 0,
+        "missing_coordinate_demand": 2.8845669825336406,
+        "allocation_conservation_error": 0
+    },
+    "ranking_extract_year": 2026,
+    "unique_candidate_count": 1728
+}

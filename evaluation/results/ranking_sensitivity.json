@@ -1,0 +1,373 @@
+{
+  "weights_order": [
+    "demand",
+    "access",
+    "complaints",
+    "acreage"
+  ],
+  "weights": {
+    "Equal": [
+      25,
+      25,
+      25,
+      25
+    ],
+    "Demand-heavy": [
+      55,
+      15,
+      15,
+      15
+    ],
+    "Access-heavy": [
+      15,
+      55,
+      15,
+      15
+    ],
+    "Balanced": [
+      35,
+      25,
+      20,
+      20
+    ]
+  },
+  "requests": {
+    "Equal": "http://localhost:3000/api/opportunities?demand=25&access=25&complaints=25&acreage=25&includeExisting=false",
+    "Demand-heavy": "http://localhost:3000/api/opportunities?demand=55&access=15&complaints=15&acreage=15&includeExisting=false",
+    "Access-heavy": "http://localhost:3000/api/opportunities?demand=15&access=55&complaints=15&acreage=15&includeExisting=false",
+    "Balanced": "http://localhost:3000/api/opportunities?demand=35&access=25&complaints=20&acreage=20&includeExisting=false"
+  },
+  "top10": {
+    "Equal": [
+      {
+        "id": "R130",
+        "name": "Saw Mill Creek Marsh",
+        "score": 86.8,
+        "rank": 1
+      },
+      {
+        "id": "R143",
+        "name": "Staten Island Industrial Park",
+        "score": 86.8,
+        "rank": 2
+      },
+      {
+        "id": "R030",
+        "name": "Willowbrook Park",
+        "score": 86.8,
+        "rank": 3
+      },
+      {
+        "id": "R122",
+        "name": "Pralls Island",
+        "score": 86.5,
+        "rank": 4
+      },
+      {
+        "id": "R159",
+        "name": "Old Place Creek Park",
+        "score": 86,
+        "rank": 5
+      },
+      {
+        "id": "R112",
+        "name": "Meredith Woods",
+        "score": 85.8,
+        "rank": 6
+      },
+      {
+        "id": "R163",
+        "name": "Meredith Woods",
+        "score": 85.2,
+        "rank": 7
+      },
+      {
+        "id": "R075A",
+        "name": "Father Macris Park",
+        "score": 85,
+        "rank": 8
+      },
+      {
+        "id": "R017A",
+        "name": "Greenbelt Native Plant Center",
+        "score": 84.9,
+        "rank": 9
+      },
+      {
+        "id": "R045",
+        "name": "Schmul Park",
+        "score": 84.2,
+        "rank": 10
+      }
+    ],
+    "Demand-heavy": [
+      {
+        "id": "R121",
+        "name": "Siedenburg Park",
+        "score": 84.6,
+        "rank": 1
+      },
+      {
+        "id": "R140",
+        "name": "King Fisher Park",
+        "score": 84.2,
+        "rank": 2
+      },
+      {
+        "id": "R089",
+        "name": "Greencroft Playground",
+        "score": 84.1,
+        "rank": 3
+      },
+      {
+        "id": "M232",
+        "name": "Lincoln Center Plaza",
+        "score": 82.6,
+        "rank": 4
+      },
+      {
+        "id": "M231",
+        "name": "Damrosch Park",
+        "score": 81.6,
+        "rank": 5
+      },
+      {
+        "id": "M045",
+        "name": "John Jay Park",
+        "score": 81,
+        "rank": 6
+      },
+      {
+        "id": "B529",
+        "name": "Bushwick Inlet Park",
+        "score": 80.9,
+        "rank": 7
+      },
+      {
+        "id": "M108T",
+        "name": "East River Walk",
+        "score": 80.7,
+        "rank": 8
+      },
+      {
+        "id": "M286",
+        "name": "Asphalt Green",
+        "score": 80.3,
+        "rank": 9
+      },
+      {
+        "id": "B029",
+        "name": "Eastern Parkway",
+        "score": 80.2,
+        "rank": 10
+      }
+    ],
+    "Access-heavy": [
+      {
+        "id": "R130",
+        "name": "Saw Mill Creek Marsh",
+        "score": 92.1,
+        "rank": 1
+      },
+      {
+        "id": "R143",
+        "name": "Staten Island Industrial Park",
+        "score": 92.1,
+        "rank": 2
+      },
+      {
+        "id": "R030",
+        "name": "Willowbrook Park",
+        "score": 92.1,
+        "rank": 3
+      },
+      {
+        "id": "R122",
+        "name": "Pralls Island",
+        "score": 91.9,
+        "rank": 4
+      },
+      {
+        "id": "R159",
+        "name": "Old Place Creek Park",
+        "score": 91.6,
+        "rank": 5
+      },
+      {
+        "id": "R112",
+        "name": "Meredith Woods",
+        "score": 91.5,
+        "rank": 6
+      },
+      {
+        "id": "R163",
+        "name": "Meredith Woods",
+        "score": 91.1,
+        "rank": 7
+      },
+      {
+        "id": "R075A",
+        "name": "Father Macris Park",
+        "score": 91,
+        "rank": 8
+      },
+      {
+        "id": "R017A",
+        "name": "Greenbelt Native Plant Center",
+        "score": 91,
+        "rank": 9
+      },
+      {
+        "id": "R045",
+        "name": "Schmul Park",
+        "score": 90.5,
+        "rank": 10
+      }
+    ],
+    "Balanced": [
+      {
+        "id": "R143",
+        "name": "Staten Island Industrial Park",
+        "score": 84.2,
+        "rank": 1
+      },
+      {
+        "id": "R030",
+        "name": "Willowbrook Park",
+        "score": 84.2,
+        "rank": 2
+      },
+      {
+        "id": "R130",
+        "name": "Saw Mill Creek Marsh",
+        "score": 84.1,
+        "rank": 3
+      },
+      {
+        "id": "R122",
+        "name": "Pralls Island",
+        "score": 83.9,
+        "rank": 4
+      },
+      {
+        "id": "R159",
+        "name": "Old Place Creek Park",
+        "score": 83.5,
+        "rank": 5
+      },
+      {
+        "id": "R112",
+        "name": "Meredith Woods",
+        "score": 83.4,
+        "rank": 6
+      },
+      {
+        "id": "R163",
+        "name": "Meredith Woods",
+        "score": 82.9,
+        "rank": 7
+      },
+      {
+        "id": "R075A",
+        "name": "Father Macris Park",
+        "score": 82.7,
+        "rank": 8
+      },
+      {
+        "id": "R017A",
+        "name": "Greenbelt Native Plant Center",
+        "score": 82.7,
+        "rank": 9
+      },
+      {
+        "id": "R121",
+        "name": "Siedenburg Park",
+        "score": 82.7,
+        "rank": 10
+      }
+    ]
+  },
+  "pairwise_overlap": [
+    {
+      "scenario_a": "Equal",
+      "scenario_b": "Demand-heavy",
+      "shared_ids": [],
+      "shared_count": 0,
+      "overlap_percentage": 0,
+      "jaccard": 0.0
+    },
+    {
+      "scenario_a": "Equal",
+      "scenario_b": "Access-heavy",
+      "shared_ids": [
+        "R017A",
+        "R030",
+        "R045",
+        "R075A",
+        "R112",
+        "R122",
+        "R130",
+        "R143",
+        "R159",
+        "R163"
+      ],
+      "shared_count": 10,
+      "overlap_percentage": 100,
+      "jaccard": 1.0
+    },
+    {
+      "scenario_a": "Equal",
+      "scenario_b": "Balanced",
+      "shared_ids": [
+        "R017A",
+        "R030",
+        "R075A",
+        "R112",
+        "R122",
+        "R130",
+        "R143",
+        "R159",
+        "R163"
+      ],
+      "shared_count": 9,
+      "overlap_percentage": 90,
+      "jaccard": 0.8181818181818182
+    },
+    {
+      "scenario_a": "Demand-heavy",
+      "scenario_b": "Access-heavy",
+      "shared_ids": [],
+      "shared_count": 0,
+      "overlap_percentage": 0,
+      "jaccard": 0.0
+    },
+    {
+      "scenario_a": "Demand-heavy",
+      "scenario_b": "Balanced",
+      "shared_ids": [
+        "R121"
+      ],
+      "shared_count": 1,
+      "overlap_percentage": 10,
+      "jaccard": 0.05263157894736842
+    },
+    {
+      "scenario_a": "Access-heavy",
+      "scenario_b": "Balanced",
+      "shared_ids": [
+        "R017A",
+        "R030",
+        "R075A",
+        "R112",
+        "R122",
+        "R130",
+        "R143",
+        "R159",
+        "R163"
+      ],
+      "shared_count": 9,
+      "overlap_percentage": 90,
+      "jaccard": 0.8181818181818182
+    }
+  ]
+}
