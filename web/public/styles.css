@@ -1,13 +1,24 @@
 /* Theme */
 
 :root {
-  --ink: #17352b;
-  --muted: #64746d;
-  --cream: #f6f1e7;
-  --paper: #fffdf8;
-  --green: #267357;
-  --lime: #d9ef5b;
-  --line: #d9dfd8;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Interface: neutral, so the map's data colours stand out */
+  --ink: #1d1d1f;
+  --muted: #5f6368;
+  --page: #f4f4f2;
+  --paper: #ffffff;
+  --line: #dcdcd8;
+  --hover: #f3f4f6;
+  --map-bg: #eef0f2;
+
+  /* Map layers: demand is a blue ramp (set in app.js); these three were
+     checked together with the dataviz palette validator */
+  --candidate: #eb6834;
+  --candidate-tint: #fdeee6;
+  --candidate-text: #9a3a12;
+  --existing: #3a3a3c;
+  --complaint: #1baf7a;
 }
 
 /* Base */
@@ -22,9 +33,9 @@
 
 body {
   margin: 0;
-  background: var(--cream);
+  background: var(--page);
   color: var(--ink);
-  font-family: "DM Sans", sans-serif;
+  font-family: var(--font);
 }
 
 button,
@@ -51,7 +62,7 @@ fieldset {
 
 h1 {
   margin: 0;
-  font: 700 26px/1.2 "Fraunces", serif;
+  font: 700 26px/1.2 var(--font);
   letter-spacing: -.02em;
 }
 
@@ -94,7 +105,7 @@ h1 {
 }
 
 .summary strong {
-  font: 700 30px/1 "Fraunces", serif;
+  font: 700 30px/1 var(--font);
 }
 
 .summary span {
@@ -133,12 +144,12 @@ h1 {
 }
 
 .layer-option:has(input:checked) {
-  border-color: #9eb4a8;
-  background: #f4f7f1;
+  border-color: #9aa0a6;
+  background: var(--hover);
 }
 
 .layer-option input {
-  accent-color: var(--green);
+  accent-color: var(--ink);
 }
 
 .layer-swatch {
@@ -148,20 +159,20 @@ h1 {
 }
 
 .candidate-swatch {
-  border: 1.5px solid var(--green);
+  border: 1.5px solid var(--candidate);
   border-radius: 2px;
-  background: #e8f1df;
+  background: #fff;
 }
 
 .density-swatch {
   border-radius: 2px;
-  background: linear-gradient(135deg, #ffffe5, #41ab5d);
+  background: linear-gradient(135deg, #e8f1fc, #256abf);
 }
 
 .complaint-swatch,
 .key-complaint {
   border-radius: 50%;
-  background: #7651a8;
+  background: var(--complaint);
 }
 
 /* Sidebar: existing dog-run toggle */
@@ -190,7 +201,7 @@ h1 {
 }
 
 .existing-park-options input {
-  accent-color: var(--green);
+  accent-color: var(--ink);
 }
 
 /* Sidebar: ranking weights */
@@ -236,7 +247,7 @@ h1 {
   border: 0;
   border-radius: 6px;
   color: #fff;
-  background: var(--green);
+  background: var(--ink);
   cursor: pointer;
 }
 
@@ -302,9 +313,9 @@ legend {
 }
 
 .filter.active {
-  border-color: var(--green);
+  border-color: var(--ink);
   color: #fff;
-  background: var(--green);
+  background: var(--ink);
 }
 
 /* Sidebar: park lists */
@@ -318,12 +329,12 @@ legend {
 
 .results-heading h2 {
   margin: 0;
-  font: 700 21px "Fraunces", serif;
+  font: 700 21px var(--font);
 }
 
 .results-heading button {
   border: 0;
-  color: var(--green);
+  color: var(--ink);
   background: none;
   font-size: 12px;
   font-weight: 600;
@@ -337,7 +348,7 @@ legend {
 
 .park-list-section h3 {
   margin: 0;
-  font: 700 16px "Fraunces", serif;
+  font: 700 16px var(--font);
 }
 
 .section-heading {
@@ -382,7 +393,7 @@ legend {
   gap: 8px;
   width: 100%;
   padding: 9px;
-  border: 1px solid #e2e6df;
+  border: 1px solid var(--line);
   border-radius: 9px;
   color: var(--ink);
   background: #fff;
@@ -393,14 +404,14 @@ legend {
 }
 
 .candidate-item:hover {
-  border-color: #ddb45f;
-  background: #fffaf0;
+  border-color: #f3a582;
+  background: #fff8f4;
   transform: translateY(-1px);
 }
 
 .candidate-item.active {
-  border-color: #d8941b;
-  background: #fff7e4;
+  border-color: var(--candidate);
+  background: var(--candidate-tint);
 }
 
 .candidate-item .rank {
@@ -409,14 +420,14 @@ legend {
   width: 27px;
   height: 27px;
   border-radius: 7px;
-  color: #805000;
-  background: #ffdf9b;
+  color: var(--candidate-text);
+  background: #fbd3bf;
   font-weight: 700;
 }
 
 .candidate-item .existing-rank {
   color: #fff;
-  background: var(--green);
+  background: var(--existing);
   font-size: 10px;
 }
 
@@ -442,8 +453,8 @@ legend {
   min-width: 35px;
   padding: 5px 6px;
   border-radius: 999px;
-  color: #805000;
-  background: #fff0c9;
+  color: var(--candidate-text);
+  background: var(--candidate-tint);
   font-size: 10px;
   text-align: center;
 }
@@ -455,7 +466,7 @@ legend {
   width: 100%;
   padding: 12px 4px;
   border: 0;
-  border-bottom: 1px solid #e9ece7;
+  border-bottom: 1px solid #ececea;
   color: var(--ink);
   background: transparent;
   text-align: left;
@@ -464,7 +475,7 @@ legend {
 
 .run-item:hover,
 .run-item.active {
-  background: #f1f5e5;
+  background: var(--hover);
 }
 
 .run-item .dot {
@@ -472,8 +483,8 @@ legend {
   height: 9px;
   margin-top: 5px;
   border-radius: 50%;
-  background: var(--green);
-  box-shadow: 0 0 0 3px #dcecdf;
+  background: var(--ink);
+  box-shadow: 0 0 0 3px #e3e5e8;
 }
 
 .run-item strong {
@@ -498,7 +509,7 @@ legend {
   position: relative;
   min-width: 0;
   overflow: hidden;
-  background: #e9eee7;
+  background: var(--map-bg);
 }
 
 #map {
@@ -518,14 +529,14 @@ legend {
   z-index: 4;
   display: grid;
   place-items: center;
-  color: var(--green);
-  background: #e9eee7;
+  color: var(--ink);
+  background: var(--map-bg);
   font-weight: 600;
 }
 
 .neighborhood {
-  fill: #f9faf5;
-  stroke: #bdc9c0;
+  fill: #fafafa;
+  stroke: #c4c7cc;
   stroke-width: .65;
   vector-effect: non-scaling-stroke;
 }
@@ -537,7 +548,7 @@ legend {
 .neighborhood.density-area:hover,
 .neighborhood.density-area.selected,
 .neighborhood.search-match {
-  stroke: #17352b;
+  stroke: var(--ink);
   stroke-width: 2;
 }
 
@@ -546,33 +557,33 @@ legend {
 }
 
 .candidate-park-point {
-  fill: #e8f1df;
+  fill: #fff;
   fill-opacity: .9;
-  stroke: #267357;
+  stroke: var(--candidate);
   stroke-width: 1.2;
   vector-effect: non-scaling-stroke;
 }
 
 .candidate-park.has-existing-run .candidate-park-point {
-  fill: #267357;
-  stroke: #fffdf8;
+  fill: var(--existing);
+  stroke: #fff;
 }
 
 .candidate-park:hover .candidate-park-point,
 .candidate-park.selected .candidate-park-point {
-  stroke: #17352b;
+  stroke: var(--ink);
   stroke-width: 2.5;
 }
 
 .candidate-park-rank {
-  fill: #17352b;
+  fill: var(--ink);
   font-size: 5.5px;
   font-weight: 700;
   pointer-events: none;
 }
 
 .complaint-point {
-  fill: #7651a8;
+  fill: var(--complaint);
   fill-opacity: .42;
   stroke: #fff;
   stroke-width: 1;
@@ -589,9 +600,9 @@ legend {
   gap: 6px;
   padding: 9px 12px;
   border-radius: 8px;
-  background: rgba(255, 253, 248, .92);
+  background: rgba(255, 255, 255, .92);
   font-size: 11px;
-  box-shadow: 0 4px 15px rgba(30, 50, 42, .12);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, .12);
 }
 
 .map-key span {
@@ -603,15 +614,15 @@ legend {
 }
 
 .map-key .key-park {
-  border: 1px solid #267357;
+  border: 1px solid var(--candidate);
   border-radius: 2px;
-  background: #e8f1df;
+  background: #fff;
 }
 
 .map-key .key-existing {
-  border: 1px solid #fffdf8;
+  border: 1px solid #fff;
   border-radius: 2px;
-  background: #267357;
+  background: var(--existing);
 }
 
 .map-key .key-complaint {
@@ -619,9 +630,9 @@ legend {
 }
 
 .key-rank {
-  border: 1px solid #17352b;
+  border: 1px solid var(--candidate);
   border-radius: 2px;
-  background: #c9e6bb;
+  background: #fff;
 }
 
 .map-key .key-rank {
@@ -634,6 +645,29 @@ legend {
   font-weight: 700;
 }
 
+.legend-density {
+  margin-bottom: 4px;
+}
+
+.key-title {
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.density-ramp {
+  width: 180px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.density-ticks {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
 /* Map tooltip */
 
 .map-tooltip {
@@ -643,7 +677,7 @@ legend {
   padding: 12px;
   border-radius: 10px;
   color: #fff;
-  background: rgba(23, 53, 43, .96);
+  background: rgba(29, 29, 31, .95);
   font-size: 11px;
   line-height: 1.35;
   box-shadow: 0 8px 22px rgba(0, 0, 0, .2);
@@ -696,7 +730,7 @@ legend {
   margin: 9px 0 0;
   padding-top: 8px;
   border-top: 1px solid rgba(255, 255, 255, .18);
-  color: #e5f0d9;
+  color: #e3e5e8;
   font-size: 10px;
 }
 
@@ -710,7 +744,7 @@ legend {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 9px;
-  box-shadow: 0 4px 15px rgba(30, 50, 42, .12);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, .12);
 }
 
 .zoom-controls button {
@@ -738,8 +772,8 @@ legend {
   padding: 22px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: rgba(255, 253, 248, .97);
-  box-shadow: 0 16px 40px rgba(30, 50, 42, .18);
+  background: rgba(255, 255, 255, .97);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .18);
 }
 
 .close {
@@ -755,7 +789,7 @@ legend {
 
 .detail-kicker {
   margin: 0 0 8px;
-  color: var(--green);
+  color: var(--ink);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: .14em;
@@ -763,7 +797,7 @@ legend {
 
 .detail-card h2 {
   margin: 0;
-  font: 700 25px/1.1 "Fraunces", serif;
+  font: 700 25px/1.1 var(--font);
 }
 
 .detail-location {
@@ -806,7 +840,7 @@ legend {
 .factor-chip {
   padding: 8px;
   border-radius: 8px;
-  background: #f3f6ef;
+  background: var(--hover);
 }
 
 .factor-chip span {
@@ -820,7 +854,7 @@ legend {
 .factor-chip strong {
   display: block;
   margin-top: 2px;
-  font: 700 16px "Fraunces", serif;
+  font: 700 16px var(--font);
 }
 
 .detail-note {

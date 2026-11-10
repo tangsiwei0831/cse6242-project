@@ -62,7 +62,9 @@ function densityContext() {
   return {
     upper,
     byId: new Map(state.density.areas.map((area) => [area.nta, area])),
-    color: d3.scaleSequentialSqrt(d3.interpolateYlGn).domain([0, upper]).clamp(true)
+    // Single-hue blue ramp, light (no demand) to dark (high demand).
+    color: d3.scaleSequentialSqrt(d3.interpolateRgbBasis(['#e8f1fc', '#9ec5f4', '#5598e7', '#256abf', '#0d366b']))
+      .domain([0, upper]).clamp(true)
   };
 }
 
@@ -297,9 +299,19 @@ function renderLegends() {
   document.querySelector('.legend-existing').hidden = !state.layers.candidate;
   document.querySelector('.legend-complaints').hidden = !state.layers.complaints;
   document.querySelector('.legend-ranking').hidden = !state.layers.candidate;
-  const mapKey = document.querySelector('.map-key');
-  mapKey.hidden = !state.layers.candidate && !state.layers.complaints;
   document.querySelector('.legend-ranking').lastChild.textContent = ` Rank in top ${topCount() || 'N'} candidate parks`;
+
+  // Demand colour ramp. The scale is square-root, so the midpoint tick sits at a quarter of the max.
+  const density = state.layers.density ? densityContext() : null;
+  document.querySelector('.legend-density').hidden = !density;
+  if (density) {
+    const stops = d3.range(0, 1.0001, 0.1).map((t) => density.color.interpolator()(t));
+    document.querySelector('#density-ramp').style.background = `linear-gradient(to right, ${stops.join(', ')})`;
+    document.querySelector('#density-mid').textContent = d3.format(',.0f')(density.upper / 4);
+    document.querySelector('#density-max').textContent = `${d3.format(',.0f')(density.upper)}+`;
+  }
+
+  document.querySelector('.map-key').hidden = !state.layers.candidate && !state.layers.complaints && !density;
 }
 
 // Fills the detail card. `stats` and `factors` are [label, value] pairs.
