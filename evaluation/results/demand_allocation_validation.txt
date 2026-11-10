@@ -1,0 +1,10 @@
+PASS: 262 unique NTAs; ten largest changes verified.
+PASS: 184 ZIP budgets conserved under both methods.
+PASS: nonnegative allocations; original unit model reproduced per NTA.
+PASS: differences, percentages, zero denominators, and redistribution checked.
+PASS: Pearson correlations independently reproduced from NTA rows.
+PASS: shared demand matches historical NTA and accessibility snapshot totals.
+NTA demand per method: 63697.42561744132136548129
+Redistributed demand: 5384.94287305965448985960 (8.45394114575515191085%)
+Pearson r, all NTAs: 0.9586430475821572
+CSV: evaluation/results/demand_allocation_ntas.csv
